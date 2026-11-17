@@ -256,7 +256,7 @@ def test_resolve_reranker_target_fallback_when_path_missing():
 
 
 def test_load_cross_encoder_caches_instances():
-    from src.retriever import _LOADED_MODELS, _load_cross_encoder
+    from src.retriever import _load_cross_encoder
 
     fake_model = FakeCrossEncoder()
     with patch("src.retriever.CrossEncoder", return_value=fake_model) as mock_ce:
@@ -270,7 +270,6 @@ def test_load_cross_encoder_caches_instances():
 
 
 def test_switch_reranker():
-    from src.retriever import HybridRetriever
 
     retriever = _make_retriever()
     fake_model = FakeCrossEncoder()

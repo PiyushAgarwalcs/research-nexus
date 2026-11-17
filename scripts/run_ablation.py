@@ -47,8 +47,6 @@ from datetime import datetime, timezone
 
 import pandas as pd
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
@@ -56,8 +54,9 @@ from config import settings  # noqa: E402
 from src.chunker import Chunker  # noqa: E402
 from src.evaluator import RAGEvaluator  # noqa: E402
 from src.generator import AdvancedRAGSystem  # noqa: E402
-from src.indexer import indexer  # noqa: E402
-from src.loader import multiloader  # noqa: E402
+from src.indexer import Indexer  # noqa: E402
+from src.loader import MultiLoader  # noqa: E402
+from src.models import get_embeddings, get_llm  # noqa: E402
 from src.retriever import HybridRetriever, _RERANKER_MODEL, _load_cross_encoder  # noqa: E402
 
 RESULTS_DIR = os.path.join(REPO_ROOT, "results")
@@ -240,10 +239,10 @@ def build_shared_index(data_dir: str, openai_api_key: str):
     across every ablation config -- only retrieval weights/reranker differ
     between configs, so there is no need to re-embed per config."""
     print("Building shared index (TokenRecursive chunking, fixed across all configs)...")
-    embeddings = OpenAIEmbeddings(model=settings.embedding_model)
+    embeddings = get_embeddings()
 
-    loader = multiloader(data_dir)
-    documents = loader._document_loader()[:50]
+    loader = MultiLoader(data_dir)
+    documents = loader.load_documents()[:50]
     if not documents:
         raise SystemExit(f"No documents loaded from {data_dir!r}. Run `python scripts/fetch_corpus.py` to download the default corpus.")
 
@@ -257,7 +256,7 @@ def build_shared_index(data_dir: str, openai_api_key: str):
     if os.path.exists(INDEX_DIR):
         shutil.rmtree(INDEX_DIR)
 
-    idx = indexer(api_key=openai_api_key)
+    idx = Indexer(embedding_fn=embeddings)
     vectorstore, bm25 = idx.create_indexes(chunks, persist_directory=INDEX_DIR)
     print(f"Indexed {len(chunks)} chunks from {len(documents)} document(s).")
     return vectorstore, bm25
@@ -488,9 +487,12 @@ def main():
         return
 
     load_dotenv()
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        raise SystemExit("OPENAI_API_KEY not set (needed for embeddings, generation, and judging).")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise SystemExit(
+            "Neither GROQ_API_KEY nor OPENAI_API_KEY set. "
+            "Please configure GROQ_API_KEY in .env to run 100% free with Groq."
+        )
     if not os.path.exists(args.dataset):
         raise SystemExit(
             f"{args.dataset} not found. Run `python main.py --regenerate-eval-set` first, "
@@ -499,13 +501,9 @@ def main():
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
-    vectorstore, bm25 = build_shared_index(args.data_dir, openai_key)
+    vectorstore, bm25 = build_shared_index(args.data_dir, api_key)
 
-    base_llm = ChatOpenAI(
-        model=settings.generator_model,
-        api_key=openai_key,
-        temperature=0,
-    )
+    base_llm = get_llm(temperature=0, api_key=api_key)
     generator_llm = ResilientRunnable(base_llm, label="generator")
     judge_llm = ResilientRunnable(base_llm, label="judge")
 

@@ -4,11 +4,11 @@ import re
 from typing import cast
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from config import settings
 from src.generator import CitationVerification
+from src.models import get_llm
 
 
 def _normalize_for_match(text):
@@ -68,9 +68,7 @@ class QAPair(BaseModel):
 class SyntheticEvaluator:
     def __init__(self, vectorstore, llm=None):
         self.vectorstore = vectorstore
-        self.llm = llm or ChatOpenAI(
-            model=settings.judge_model, temperature=settings.synthetic_temperature
-        )
+        self.llm = llm or get_llm(temperature=settings.synthetic_temperature)
         self.structured_llm = self.llm.with_structured_output(QAPair)
 
         store_data = self.vectorstore.get()

@@ -21,7 +21,19 @@ venv/
 .venv/
 env/
 
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
 # Pytest / coverage cache
 .pytest_cache/
+.mypy_cache/
 .coverage
 htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

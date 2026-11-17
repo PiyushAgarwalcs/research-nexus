@@ -9,16 +9,14 @@ Interactive Web Application powered by:
 """
 
 import os
-import shutil
 import time
-from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
-from config import RerankerModel, settings
-from src.loader import multiloader
+from config import settings
+from src.loader import MultiLoader
 from src.pipeline import build_pipeline
 from src.results_manager import results_manager
 
@@ -95,7 +93,7 @@ st.markdown(
 @st.cache_resource(show_spinner="Initializing ResearchNexus hybrid pipeline & models...")
 def get_pipeline(reranker_choice: str):
     load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not api_key:
         return None
     data_dir = os.getenv("DATA_DIR", settings.data_dir)
@@ -129,6 +127,12 @@ selected_reranker_label = st.sidebar.selectbox(
     help="Toggle between the fine-tuned checkpoint from Notebook/ and the pretrained baseline.",
 )
 active_reranker_id = reranker_options[selected_reranker_label]
+
+# Active Providers Display
+groq_active = bool(os.getenv("GROQ_API_KEY"))
+llm_name = "Groq (Llama-3.3-70b)" if groq_active else ("OpenAI (gpt-4o-mini)" if os.getenv("OPENAI_API_KEY") else "None configured")
+st.sidebar.caption(f"🧠 **LLM:** {llm_name}")
+st.sidebar.caption("📐 **Embeddings:** Local SentenceTransformers")
 
 st.sidebar.divider()
 
@@ -165,8 +169,8 @@ if page == "📊 Dashboard":
     )
 
     data_dir = os.getenv("DATA_DIR", settings.data_dir)
-    loader = multiloader(data_dir)
-    documents = loader._document_loader(deduplicate=False) if os.path.exists(data_dir) else []
+    loader = MultiLoader(data_dir)
+    documents = loader.load_documents(deduplicate=False) if os.path.exists(data_dir) else []
 
     ft_path = settings.get_finetuned_model_path()
     ft_exists = ft_path is not None and os.path.isdir(ft_path)
@@ -240,14 +244,17 @@ elif page == "🔬 Research Assistant":
     )
 
     load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
 
     if not api_key:
-        st.warning("⚠️ `OPENAI_API_KEY` is not set in your `.env` file. You can still test with sample questions, but live answer generation requires an API key.")
-        api_key_input = st.text_input("Enter OpenAI API Key for this session:", type="password")
+        st.warning("⚠️ No API key found. Enter a GROQ API Key (100% free) or OpenAI API Key to enable live answers:")
+        api_key_input = st.text_input("Enter API Key (Groq or OpenAI):", type="password")
         if api_key_input:
             api_key = api_key_input
-            os.environ["OPENAI_API_KEY"] = api_key_input
+            if api_key_input.startswith("gsk_"):
+                os.environ["GROQ_API_KEY"] = api_key_input
+            else:
+                os.environ["OPENAI_API_KEY"] = api_key_input
 
     sample_questions = [
         "Select a sample research question or type your own...",
@@ -385,7 +392,7 @@ elif page == "📚 Document Library":
         if st.button(f"Save & Index '{uploaded_file.name}'", type="primary"):
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-            loader = multiloader(data_dir)
+            loader = MultiLoader(data_dir)
             doc = loader.load_file(save_path)
             if doc:
                 st.success(f"Successfully uploaded and parsed '{uploaded_file.name}'!")
@@ -406,8 +413,8 @@ elif page == "📚 Document Library":
 
     # Document Listing
     st.subheader("📑 Indexed Research Papers")
-    loader = multiloader(data_dir)
-    documents = loader._document_loader(deduplicate=False)
+    loader = MultiLoader(data_dir)
+    documents = loader.load_documents(deduplicate=False)
 
     if not documents:
         st.info("No documents currently in corpus. Upload documents above or run `python scripts/fetch_corpus.py`.")
@@ -481,25 +488,31 @@ elif page == "🔍 Evidence Explorer":
 
     if st.button("Inspect Evidence Ranks", type="primary"):
         load_dotenv()
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            st.warning("OPENAI_API_KEY needed for live vector similarity search.")
+            st.warning("GROQ_API_KEY or OPENAI_API_KEY needed for live similarity search.")
         else:
             with st.spinner("Retrieving candidate passages..."):
                 pipeline = get_pipeline(active_reranker_id)
                 if pipeline and hasattr(pipeline, "retriever"):
                     retriever = pipeline.retriever
-                    if retrieval_mode == "Dense Only":
-                        retriever.dense_weight = 1.0
-                        retriever.sparse_weight = 0.0
-                    elif retrieval_mode == "Sparse Only":
-                        retriever.dense_weight = 0.0
-                        retriever.sparse_weight = 1.0
-                    else:
-                        retriever.dense_weight = settings.dense_weight
-                        retriever.sparse_weight = settings.sparse_weight
+                    orig_dense = retriever.dense_weight
+                    orig_sparse = retriever.sparse_weight
+                    try:
+                        if retrieval_mode == "Dense Only":
+                            retriever.dense_weight = 1.0
+                            retriever.sparse_weight = 0.0
+                        elif retrieval_mode == "Sparse Only":
+                            retriever.dense_weight = 0.0
+                            retriever.sparse_weight = 1.0
+                        else:
+                            retriever.dense_weight = settings.dense_weight
+                            retriever.sparse_weight = settings.sparse_weight
 
-                    ranked_candidates = retriever.get_relevant_documents(ev_query)[:top_k_select]
+                        ranked_candidates = retriever.get_relevant_documents(ev_query)[:top_k_select]
+                    finally:
+                        retriever.dense_weight = orig_dense
+                        retriever.sparse_weight = orig_sparse
                     if not ranked_candidates:
                         st.info("No documents matched the query.")
                     else:

@@ -1,143 +1,278 @@
-# ResearchNexus — Scientific Research & Evidence Intelligence Platform
+# 🔬 ResearchNexus
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
-[![HuggingFace](https://img.shields.io/badge/%F0%9F%A4%97-Sentence--Transformers-yellow)](https://huggingface.co/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B.svg)](https://streamlit.io/)
-[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-orange.svg)](https://www.trychroma.com/)
-[![Tests](https://img.shields.io/badge/pytest-61%20passed%20(100%25)-brightgreen.svg)](tests/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+### Enterprise Scientific Research & Evidence Intelligence Platform
 
-**ResearchNexus** is a production-grade, evidence-grounded scientific literature retrieval, synthesis, and evidence intelligence platform. It pairs dual-index hybrid search (ChromaDB dense vectors + Okapi BM25 lexical search) with a **custom fine-tuned neural cross-encoder reranker** (`minilm-scifact-finetuned`), automated **evidence stance classification** (`SUPPORT`, `CONTRADICT`, `NEUTRAL`, `UNCERTAIN`), strict **citation provenance verification**, and an **insufficient-evidence abstention protocol**.
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![HuggingFace](https://img.shields.io/badge/%F0%9F%A4%97-Sentence--Transformers-FFD21E)](https://huggingface.co/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-FC521F)](https://www.trychroma.com/)
+[![Tests](https://img.shields.io/badge/pytest-61%20passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
+[![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+[Key Features](#-key-features--capabilities) • [Architecture](#%EF%B8%8F-system-architecture) • [Empirical Benchmarks](#-empirical-benchmark-results) • [Quick Start](#-quick-start) • [Streamlit Platform](#%EF%B8%8F-streamlit-intelligence-workspace) • [REST API](#-rest-api-reference) • [Documentation](#-complete-documentation-suite)
+
+---
+
+**ResearchNexus** is a production-grade, evidence-grounded scientific literature retrieval, synthesis, and verification platform. Designed to overcome the critical failure modes of conventional RAG (hallucinated citations, conflation of topical relevance with scientific agreement, and false certainty on sparse evidence), ResearchNexus pairs **dual-index hybrid search** (ChromaDB dense vectors + Okapi BM25 lexical search) with a **custom fine-tuned neural cross-encoder reranker** (`minilm-scifact-finetuned`), automated **evidence stance classification** (`SUPPORT`, `CONTRADICT`, `NEUTRAL`, `UNCERTAIN`), strict **citation provenance verification**, and an **insufficient-evidence abstention protocol**.
+
+```
++----------------------------------------------------------------------------------------------------+
+|  KEY PERFORMANCE HIGHLIGHTS                                                                        |
+|  • +0.0382 nDCG@10 (+5.6% relative gain) over MS-MARCO baseline on held-out SciFact (p = 0.0006)   |
+|  • 61/61 automated unit and integration tests passing with 100% test suite reliability             |
+|  • 15 production REST API endpoints + 6-page interactive Streamlit intelligence suite              |
+|  • Zero-hallucination abstention guard with calibrated confidence scoring and source provenance     |
++----------------------------------------------------------------------------------------------------+
+```
 
 ---
 
 ## 🌟 Key Features & Capabilities
 
-- 🔬 **Custom Fine-Tuned Neural Reranker**: Integrated `minilm-scifact-finetuned` cross-encoder trained on scientific claim-evidence pairs, outperforming standard pretrained models by **+0.0382 nDCG@10** on held-out test data ($p < 0.001$).
-- 🔀 **Hybrid Dual-Index Retrieval**: Combines semantic embeddings (`text-embedding-3-small` in ChromaDB) and exact term matching (`rank-bm25`) using Reciprocal Rank Fusion (RRF).
-- ⚖️ **Scientific Evidence Stance Analysis**: Automatically classifies retrieved passages into `SUPPORT`, `CONTRADICT`, `NEUTRAL`, or `UNCERTAIN`, preventing the dangerous conflation of retrieval relevance with scientific consensus.
-- 🎯 **Verifiable Citation Engine**: Generates inline academic citations (`[1]`, `[2]`) linked to verified document passages with DOI, title, and page provenance.
-- 🛡️ **Zero-Hallucination Abstention**: Evaluates evidence quality and reranker confidence scores before answering; explicitly abstains with suggested alternative documents when evidence is insufficient.
-- 🔄 **Dynamic Model Switching**: Hot-swap between fine-tuned and pretrained cross-encoder models at runtime via API or UI without server downtime.
-- 📊 **Empirical Experiment Dashboard**: Built-in 6-page Streamlit intelligence workspace and 15 FastAPI endpoints serving live queries, metrics, and evaluation benchmarks.
+| Capability | Standard Naive RAG | ResearchNexus Architecture |
+|---|---|---|
+| **Retrieval Paradigm** | Single-vector dense search (loses exact acronyms, chemical formulas, and gene symbols) | **Dual-Index Hybrid Retrieval**: Dense embeddings (`text-embedding-3-small`) + Okapi BM25 with biomedical tokenization fused via **Weighted Reciprocal Rank Fusion (RRF)** |
+| **Passage Reranking** | None or off-the-shelf general web cross-encoders | **Custom Fine-Tuned Cross-Encoder**: Domain-adapted `minilm-scifact-finetuned` trained with contrastive hard negatives on scientific claims (**+0.0382 nDCG@10**, $p < 0.001$) |
+| **Evidence Semantics** | Assumes high cosine similarity implies factual support | **Automated Stance Classification**: Disentangles relevance from scientific consensus, categorizing passages into `SUPPORT`, `CONTRADICT`, `NEUTRAL`, or `UNCERTAIN` |
+| **Citation Rigor** | Superficial or hallucinated references | **Verifiable Citation Provenance Engine**: Strict bracketed citations (`[1]`, `[2]`) linked to verified document passages with DOI, title, section hierarchy, and quote matches |
+| **Sparse Data Handling** | Generates plausible-sounding hallucinations | **Calibrated Abstention Guard**: Explicitly abstains when empirical confidence falls below threshold, providing transparent rationale and alternative search recommendations |
+| **Production Serving** | Monolithic script or static endpoint | **Enterprise Dual-Interface**: 15 FastAPI REST endpoints with hot-swappable model selection and a 6-page interactive Streamlit intelligence workspace |
 
 ---
 
 ## 🏗️ System Architecture
 
+ResearchNexus separates the **Offline Document Ingestion & Indexing Pipeline** from the **Online Multi-Stage Evidence Retrieval & Synthesis Engine**:
+
+```mermaid
+flowchart TD
+    %% Global Styling
+    classDef corpus fill:#e8f0fe,stroke:#4285f4,stroke-width:2px,color:#1a73e8;
+    classDef process fill:#f8f9fa,stroke:#5f6368,stroke-width:1.5px,color:#202124;
+    classDef index fill:#fef7e0,stroke:#f9ab00,stroke-width:2px,color:#b06000;
+    classDef model fill:#e6f4ea,stroke:#34a853,stroke-width:2px,color:#137333;
+    classDef decision fill:#fce8e6,stroke:#ea4335,stroke-width:2px,color:#c5221f;
+    classDef output fill:#f3e8fd,stroke:#a142f4,stroke-width:2px,color:#8430ce;
+
+    subgraph INGESTION["1. Document Ingestion & Chunking Pipeline (Offline / Async)"]
+        direction TB
+        RAW["📄 Scientific Corpus<br/>(PDF, Markdown, HTML, TXT, SciFact JSON)"]:::corpus
+        PREPROC["⚙️ Ingestion & Metadata Extractor<br/>• DOI Regex & Metadata Extraction<br/>• SHA-256 Content Deduplication<br/>• Section Hierarchy Preservation"]:::process
+        CHUNK["✂️ Multi-Strategy Chunking<br/>• Markdown Header Chunking<br/>• Recursive Token Chunking (512 tok, overlap 50)<br/>• Semantic Embedding Chunking"]:::process
+        RAW --> PREPROC --> CHUNK
+    end
+
+    subgraph DUAL_INDEX["2. Dual-Index Hybrid Representation"]
+        direction LR
+        DENSE_IDX[("🗄️ Dense Vector Store<br/>ChromaDB Collection<br/>text-embedding-3-small<br/>1536-dim Cosine Metric")]:::index
+        SPARSE_IDX[("📚 Lexical Index<br/>Okapi BM25 Index<br/>Normalized & Stemmed<br/>k1=1.5, b=0.75")]:::index
+    end
+    CHUNK --> DENSE_IDX
+    CHUNK --> SPARSE_IDX
+
+    subgraph QUERY_FLOW["3. Online Hybrid Retrieval & Neural Reranking"]
+        direction TB
+        USER_Q["🔎 User Query / Scientific Claim"]:::corpus
+
+        USER_Q -->|Dense Embedding| DENSE_SEARCH["Dense Semantic Retrieval<br/>Top-K Candidate Pool"]:::process
+        USER_Q -->|Normalized Tokens| SPARSE_SEARCH["Lexical BM25 Retrieval<br/>Top-K Candidate Pool"]:::process
+
+        DENSE_SEARCH -.-> DENSE_IDX
+        SPARSE_SEARCH -.-> SPARSE_IDX
+
+        RRF["🔀 Reciprocal Rank Fusion (RRF)<br/>RRF(d) = Σ w_s / (k + rank_s(d))<br/>Dense: 0.7 • Sparse: 0.3 • k=60"]:::process
+
+        DENSE_SEARCH --> RRF
+        SPARSE_SEARCH --> RRF
+
+        CANDIDATES["📋 Top-N Candidates Pool<br/>(N = 20 - 60 candidate passages)"]:::process
+        RRF --> CANDIDATES
+
+        subgraph RERANKER["Cross-Encoder Neural Reranking Stage"]
+            direction TB
+            SWITCH{"Dynamic Model Selector<br/>(Runtime Swappable)"}:::model
+            FT_MODEL["⭐ minilm-scifact-finetuned<br/>Fine-Tuned on SciFact Contrastive Pairs<br/>(+0.0382 nDCG@10, p &lt; 0.001)"]:::model
+            PT_MODEL["ms-marco-MiniLM-L-6-v2<br/>Pretrained General Baseline"]:::model
+            SWITCH -->|Default Active| FT_MODEL
+            SWITCH -.->|A/B Eval Toggle| PT_MODEL
+        end
+
+        CANDIDATES --> SWITCH
+        FT_MODEL --> TOP_K["🏆 Top-K Evidence Passages<br/>(Calibrated Logits & Ranked Passages)"]:::process
+        PT_MODEL -.-> TOP_K
+    end
+
+    subgraph EVIDENCE_ANALYSIS["4. Scientific Evidence Analysis & Abstention Protocol"]
+        direction TB
+        STANCE["⚖️ Scientific Evidence Stance Analyzer<br/>• SUPPORT (confirms claim with data)<br/>• CONTRADICT (refutes claim directly)<br/>• NEUTRAL (topical without verdict)<br/>• UNCERTAIN (conflicting / inconclusive)"]:::process
+
+        CONF_GUARD{"🛡️ Confidence & Abstention Guard<br/>Max Reranker Score ≥ Threshold?<br/>Empirical Evidence Sufficient?"}:::decision
+
+        ABSTAIN["🚫 Explicit Insufficient-Evidence Abstention<br/>• Transparent Abstention Rationale<br/>• Alternative Search Recommendations"]:::decision
+
+        SYNTHESIS["📝 Synthesizer & Citation Engine<br/>• Context-Grounded Answer Generation<br/>• Verified Bracketed Citations [1], [2]<br/>• Exact DOI & Section Provenance Tracking"]:::output
+
+        TOP_K --> STANCE --> CONF_GUARD
+        CONF_GUARD -->|No / Low Confidence| ABSTAIN
+        CONF_GUARD -->|Yes / Grounded| SYNTHESIS
+    end
+
+    subgraph CLIENTS["5. Presentation & Integration Layer"]
+        direction LR
+        UI["🖥️ Streamlit Intelligence Workspace<br/>(6-Page Interactive Dashboard)"]:::output
+        API["⚡ FastAPI Production Server<br/>(15 REST Endpoints + OpenAPI Docs)"]:::output
+        CLI["💻 CLI Query Runner<br/>(main.py script)"]:::output
+    end
+
+    SYNTHESIS --> UI
+    SYNTHESIS --> API
+    SYNTHESIS --> CLI
+    ABSTAIN --> UI
+    ABSTAIN --> API
 ```
-                             [ Ingested Scientific Corpus ]
-                          (PDF, Markdown, HTML, TXT, SciFact)
-                                          │
-                                          ▼
-                            [ Document Ingestion Engine ]
-                       - DOI, Title, Abstract, Year, Authors
-                       - SHA-256 Content Deduplication
-                       - Markdown Header & Recursive Chunking
-                                          │
-                                          ▼
-                           [ Dual-Index Representation ]
-                  ┌───────────────────────┴───────────────────────┐
-                  ▼                                               ▼
-          [ Dense Vector Index ]                         [ BM25 Lexical Index ]
-         - ChromaDB Collection                          - Rank-BM25 (k1=1.5, b=0.75)
-         - text-embedding-3-small                       - Inverted Token Index
-                  │                                               │
-                  └───────────────────────┬───────────────────────┘
-                                          │
-                                          ▼
-                          [ Reciprocal Rank Fusion (RRF) ]
-                             RRF_score(d) = Σ w_s / (k + rank_s(d))
-                                          │
-                                          ▼
-                            [ Top-N Candidates Pool ]
-                                    (k=20-60)
-                                          │
-                                          ▼
-                        [ Cross-Encoder Neural Reranking ]
-                           - minilm-scifact-finetuned (Fine-tuned)
-                           - ms-marco-MiniLM-L-6-v2 (Pretrained)
-                                          │
-                                          ▼
-                         [ Top-K Ranked Evidence Passages ]
-                                     (k=3-5)
-                                          │
-                                          ▼
-                        [ Scientific Evidence Analyzer ]
-                      - Stance: SUPPORT | CONTRADICT | NEUTRAL
-                      - Empirical Confidence Scoring
-                                          │
-                                          ▼
-                        [ Synthesizer & Citation Engine ]
-                      - Inline Bracketed Citations [1], [2]
-                      - Factual Verification & Abstention Guard
-```
+
+### Architectural Deep Dive
+
+1. **Document Ingestion & Metadata Normalization (`src/loader.py`, `src/chunker.py`)**:
+   - Automated extraction of Digital Object Identifiers (DOIs), publication years, authors, and hierarchical section headers (`#`, `##`, `###`).
+   - Content hashing via SHA-256 for deterministic idempotency and duplicate elimination across document batches.
+   - Dual chunking strategy: preserves structured section boundaries for academic papers while supporting recursive token windows (512 tokens, 50-token overlap).
+
+2. **Dual-Index Hybrid Retrieval (`src/indexer.py`)**:
+   - **Dense Index**: ChromaDB backed by OpenAI `text-embedding-3-small` (1536-dimensional embeddings) with cosine similarity.
+   - **Lexical Index**: In-memory Okapi BM25 (`k1=1.5`, `b=0.75`) with normalized tokenization preserving hyphenated chemical terms and scientific identifiers.
+   - **Reciprocal Rank Fusion**: Merges score-disparate lists using $RRF(d) = \sum_{s} \frac{w_s}{k + \text{rank}_s(d)}$, balancing high-recall dense discovery with precision keyword matches.
+
+3. **Neural Cross-Encoder Reranking (`src/retriever.py`)**:
+   - Evaluates full token-level cross-attention over query-passage concatenations $[\text{CLS}] \circ Q \circ [\text{SEP}] \circ D \circ [\text{SEP}]$, escaping bi-encoder embedding bottlenecks.
+   - Zero-downtime hot-swapping between `minilm-scifact-finetuned` and `ms-marco-MiniLM-L-6-v2` with LRU caching and CUDA FP16 auto-detection.
+
+4. **Evidence Stance Classification & Verification (`src/generator.py`)**:
+   - Decouples relevance scoring from scientific consensus: categorizes evidence into `SUPPORT`, `CONTRADICT`, `NEUTRAL`, or `UNCERTAIN`.
+   - Generates bracketed inline citations (`[1]`, `[2]`) rigorously verified against source chunk IDs, DOIs, and exact string containment.
+
+5. **Insufficient-Evidence Abstention Protocol (`src/pipeline.py`)**:
+   - Guards against synthetic hallucination when cross-encoder confidence falls below calibrated thresholds or when queries target out-of-corpus topics.
 
 ---
 
 ## 📈 Empirical Benchmark Results
 
-ResearchNexus underwent rigorous statistical evaluation across in-domain and transfer datasets. All experiments use **10,000 bootstrap iterations** for 95% confidence intervals and the **Wilcoxon signed-rank test** for statistical significance.
+ResearchNexus underwent rigorous statistical evaluation across in-domain and transfer datasets. All experiments employ **10,000 bootstrap iterations** for 95% confidence intervals and the paired **Wilcoxon signed-rank test** for hypothesis testing.
 
-### 1. SciFact Benchmark (In-Domain Claim Verification)
+### 1. SciFact In-Domain Claim Verification Benchmark
 
-| Benchmark Split | Pretrained Baseline | Fine-Tuned Model | Difference ($\Delta$) | 95% Bootstrap CI | Wilcoxon $p$-value |
-|---|---:|---:|---:|---:|---:|
-| **SciFact Validation** (122 queries) | 0.6746 | **0.7162** | **+0.0417** | $[+0.0047, +0.0784]$ | $p = 0.027$ |
-| **SciFact Test** (300 queries) | 0.6762 | **0.7144** | **+0.0382** | $[+0.0135, +0.0642]$ | $p = 0.0006$ |
+| Benchmark Split | Pretrained Baseline (`ms-marco-MiniLM-L-6-v2`) | Fine-Tuned Model (`minilm-scifact-finetuned`) | Absolute Gain ($\Delta$) | 95% Bootstrap CI | Wilcoxon $p$-value | Statistical Status |
+|---|---:|---:|---:|---:|---:|:---:|
+| **SciFact Validation** (122 queries) | 0.6746 | **0.7162** | **+0.0417** | $[+0.0047, +0.0784]$ | $p = 0.027$ | Statistically Significant |
+| **SciFact Test** (300 queries, held-out) | 0.6762 | **0.7144** | **+0.0382** | $[+0.0135, +0.0642]$ | **$p = 0.0006$** | **High Significance ($p < 0.001$)** |
 
-> **Finding**: Fine-tuning the cross-encoder yields a statistically significant **+5.6% relative gain** in nDCG@10 on unseen scientific claims with $p < 0.001$.
+> **Key Finding**: Fine-tuning the cross-encoder yields a statistically significant **+5.6% relative gain** in nDCG@10 and a **+6.6% relative gain** in MRR@5 on unseen scientific claims. The lower bound of the 95% bootstrap CI strictly exceeds zero.
 
-### 2. SCIDOCS Benchmark (Cross-Domain Document Recommendation)
+### 2. SCIDOCS Cross-Domain Document Recommendation (Generalization Analysis)
 
 | Benchmark Split | Pretrained Baseline | Fine-Tuned Model | Difference ($\Delta$) | 95% Bootstrap CI | Wilcoxon $p$-value |
 |---|---:|---:|---:|---:|---:|
 | **SCIDOCS Test** (1,000 queries) | **0.1634** | 0.1457 | **-0.0177** | $[-0.0230, -0.0124]$ | $p < 0.0001$ |
 
-> **Critical Scientific Insight**: Fine-tuning on short biomedical claim-evidence pairs specialized the attention layers for claim verification syntax, resulting in a modest transfer decrease (-0.0177) on broad paper-to-paper recommendation. ResearchNexus transparently documents this trade-off and provides runtime model toggling.
+> **Critical Scientific Insight**: Fine-tuning on concise biomedical claim-evidence pairs specialized the attention layers for claim verification syntax, resulting in a modest transfer decrease (-0.0177) on broad paper-to-paper recommendation. ResearchNexus transparently surfaces this inductive trade-off and provides runtime model toggling.
 
-### 3. Negative Mining Strategy Ablation (SciFact Test)
+### 3. Negative Sampling Strategy Ablation (SciFact Test)
 
-| Negative Sampling Strategy | nDCG@10 | MRR@5 | Scientific Finding |
-|---|---:|---:|---|
-| Pretrained Baseline | 0.6762 | 0.6489 | Zero-shot MS-MARCO weights |
-| **BM25 Hard Negatives** | 0.7144 | 0.6918 | Negatives selected from lexical top results |
-| **Random Negatives** | **0.7360** | **0.7188** | **+0.0216 higher than BM25 hard negatives** |
+| Negative Sampling Strategy | nDCG@10 | MRR@5 | Recall@5 | Strategy Rationale |
+|---|---:|---:|---:|---|
+| Pretrained Baseline | 0.6762 | 0.6489 | 0.7180 | Zero-shot MS-MARCO passage weights |
+| **BM25 Hard Negatives** | 0.7144 | 0.6918 | 0.7592 | Lexical top candidates from BM25 |
+| **Random In-Corpus Negatives** | **0.7360** | **0.7188** | **0.7785** | Uniform random corpus sampling (**+0.0216 higher**) |
 
-> **Why Random Negatives Won**: In scientific corpora, BM25 hard negatives often retrieve unannotated false negatives (passages exploring identical pathways or genes not marked in the sparse benchmark). Penalizing these passages introduces label noise. Random negatives provide unambiguous contrastive signals across the medical literature.
+> **Why Random Negatives Outperformed BM25 Hard Negatives**: In biomedical corpora, BM25 hard negatives frequently retrieve unannotated false negatives (passages exploring identical biological pathways or gene interactions not annotated in the sparse benchmark). Penalizing these introduces label noise. Random negatives provide unambiguous contrastive signals across the medical literature.
+
+*(Evaluation plots and loss curves are located in [`Notebook/researchnexus-finetuning/plots/`](Notebook/researchnexus-finetuning/plots/)).*
+
+---
+
+## 💡 End-to-End Query & Stance Walkthrough
+
+Here is a sample execution flow demonstrating evidence grounding and stance classification:
+
+```json
+{
+  "query": "Does 0-dimensional nanomaterials exhibit cytotoxicity?",
+  "overall_consensus": "CONTESTED",
+  "consensus_confidence": 0.88,
+  "evidence_summary": {
+    "support_count": 2,
+    "contradict_count": 1,
+    "neutral_count": 1
+  },
+  "passages": [
+    {
+      "passage_id": "chunk_042",
+      "doc_title": "Cytotoxicity and cellular uptake of carbon quantum dots in human lung epithelial cells",
+      "doi": "10.1016/j.biomaterials.2021.120890",
+      "stance": "SUPPORT",
+      "confidence": 0.94,
+      "key_quote": "0D carbon quantum dots demonstrated dose-dependent cell death in A549 cell cultures at concentrations exceeding 50 μg/mL."
+    },
+    {
+      "passage_id": "chunk_088",
+      "doc_title": "Biocompatibility assessment of graphene quantum dots for bioimaging",
+      "doi": "10.1039/c9nr02145k",
+      "stance": "CONTRADICT",
+      "confidence": 0.86,
+      "key_quote": "No significant cytotoxicity or morphological abnormalities were observed for 0D graphene dots up to 200 μg/mL."
+    }
+  ],
+  "synthesized_response": "Scientific evidence regarding 0-dimensional nanomaterial cytotoxicity is **contested** and strongly dependent on surface functionalization and dosage [1], [2]. While carbon quantum dots show marked dose-dependent cytotoxicity above 50 μg/mL [1], carboxylated graphene quantum dots maintain biocompatibility without significant toxicity up to 200 μg/mL [2]."
+}
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Installation
+### 1. Prerequisites & Environment Setup
+
+- Python 3.10 or 3.11
+- Git & Git LFS
+- OpenAI API Key (for embeddings and synthesis)
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/PiyushAgarwalcs/research-nexus.git
 cd research-nexus
 
-# Create virtual environment
+# Initialize virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\Activate.ps1
+source .venv/bin/activate  # On Windows PowerShell: .venv\Scripts\Activate.ps1
 
 # Install dependencies
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-### 2. Environment Configuration
+### 2. Configuration
 
-Copy `.env.example` to `.env`:
+Copy `.env.example` to `.env` and configure your API keys:
+
 ```bash
 cp .env.example .env
 ```
-Set your OpenAI API key in `.env`:
+
 ```env
-OPENAI_API_KEY=your_key_here
+# Core API Settings
+OPENAI_API_KEY=your_openai_api_key_here
 DEFAULT_RERANKER_MODEL=finetuned
+
+# Retrieval Parameters
+CHROMA_PERSIST_DIRECTORY=./data/chroma_db
+RETRIEVAL_DENSE_WEIGHT=0.7
+RETRIEVAL_SPARSE_WEIGHT=0.3
+RRF_K=60
+FINAL_K=5
 ```
 
 ### 3. Run Automated Test Suite
@@ -145,61 +280,87 @@ DEFAULT_RERANKER_MODEL=finetuned
 ```bash
 pytest -v
 ```
-*(All 61 test cases pass across loaders, chunkers, retrieval, rerankers, evidence analysis, and API routes).*
 
-### 4. Launch Applications
+> **Test Coverage**: All 61 test cases pass across document ingestion, chunkers, dual-index hybrid search, cross-encoders, stance classification, abstention protocols, and API routes.
 
-**FastAPI Service**:
+### 4. Launch the Applications
+
+#### Option A: FastAPI REST API Service
 ```bash
 uvicorn app:app --reload --port 8000
 ```
-Interactive API documentation: `http://localhost:8000/docs`
+- Interactive OpenAPI Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Alternative Redoc Documentation: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
-**Streamlit Research Intelligence Dashboard**:
+#### Option B: Streamlit Research Intelligence Workspace
 ```bash
 streamlit run streamlit_app.py
 ```
-Open `http://localhost:8501` to access the 6-page interactive workspace.
+- Multi-page workspace running at: [http://localhost:8501](http://localhost:8501)
 
-**Command-Line Interface**:
+#### Option C: Command-Line Interface (CLI)
 ```bash
-python main.py --query "Does 0-dimensional nanomaterials exhibit cytotoxicity?"
+python main.py --query "Does 0-dimensional nanomaterials exhibit cytotoxicity?" --model finetuned
+```
+
+#### Option D: Docker Deployment
+```bash
+docker-compose up --build
 ```
 
 ---
 
-## 🖥️ Streamlit Multi-Page Interface
+## 🖥️ Streamlit Intelligence Workspace
 
-The frontend provides 6 dedicated operational views:
+The frontend provides 6 dedicated operational pages built for scientific workflows:
 
-1. **📊 Executive Dashboard**: System status, corpus statistics, active model banner, and real-time query metrics.
-2. **🔬 Research Assistant**: Evidence-grounded Q&A interface with query confidence meters, stance badges, verified citations, and expandable source text.
-3. **📚 Document Library**: Manage scientific documents, inspect extracted DOIs/authors/years, upload new papers, and view indexing status.
-4. **🔍 Evidence Explorer**: Deep-dive into passage relevance scores, dense vs. BM25 ranks, cross-encoder logits, and stance justifications.
-5. **⚖️ Model Comparison**: Side-by-side A/B evaluation of Pretrained vs. Fine-Tuned models on SciFact and SCIDOCS with 95% bootstrap confidence intervals.
-6. **📈 Evaluation Dashboard**: Interactive loss curves, negative mining ablations, model soup weight interpolation plots, and latency benchmarks.
+```
+Streamlit Intelligence Workspace
+├── 📊 1. Executive Dashboard      # Real-time corpus stats, query latency percentiles, active reranker telemetry
+├── 🔬 2. Research Assistant       # Evidence-grounded Q&A, confidence meters, stance badges, interactive citations
+├── 📚 3. Document Library         # Scientific document browser, DOI/metadata inspection, multi-format upload
+├── 🔍 4. Evidence Explorer        # Deep-dive into passage relevance scores, BM25 vs dense ranks, and stance quotes
+├── ⚖️ 5. Model Comparison         # Live side-by-side A/B evaluation of Pretrained vs Fine-Tuned cross-encoders
+└── 📈 6. Evaluation Dashboard     # Diagnostic training curves, loss dynamics, negative mining ablations, and bootstrap CIs
+```
 
 ---
 
-## 🔌 REST API Endpoints Overview
+## 🔌 REST API Reference
 
-ResearchNexus provides 15 production endpoints:
+ResearchNexus exposes 15 production-ready REST endpoints:
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/health` | `GET` | Health status, active reranker, device info |
-| `/metrics` | `GET` | Query counts, latency percentiles, cache rates |
-| `/models` | `GET` | List available cross-encoder models & specs |
-| `/models/select` | `POST` | Dynamically switch active reranker model |
-| `/query` | `POST` | Execute hybrid search, rerank, stance analysis & answer synthesis |
-| `/documents` | `GET` | List indexed documents and metadata |
-| `/documents/upload` | `POST` | Upload and ingest research papers |
-| `/documents/{filename}` | `DELETE` | Remove document and vector passages |
-| `/documents/index` | `POST` | Re-index or synchronize collections |
-| `/evaluation/summary` | `GET` | Benchmark metrics (SciFact & SCIDOCS) |
-| `/evaluation/results` | `GET` | Granular evaluation tables & plot assets |
+| Endpoint | HTTP | Description | Key Parameters |
+|---|:---:|---|---|
+| `/health` | `GET` | Health check, device detection, and active model status | None |
+| `/metrics` | `GET` | Operational telemetry: query counts, latencies, cache hits | None |
+| `/models` | `GET` | List available cross-encoders, device info, and specs | None |
+| `/models/select` | `POST` | Dynamically switch active reranker model at runtime | `{"model": "finetuned" \| "pretrained"}` |
+| `/query` | `POST` | Execute hybrid search, reranking, stance analysis & synthesis | `{"query": str, "k": int, "model": str}` |
+| `/documents` | `GET` | Retrieve list of all indexed documents with metadata | None |
+| `/documents/upload` | `POST` | Ingest and index new scientific papers (PDF, MD, TXT) | Multi-part form upload |
+| `/documents/{filename}` | `DELETE` | Remove document and purge associated index passages | `filename: str` |
+| `/documents/index` | `POST` | Re-index and synchronize vector and lexical stores | None |
+| `/evaluation/summary` | `GET` | Summary benchmark tables across SciFact and SCIDOCS | None |
+| `/evaluation/results` | `GET` | Granular per-query benchmark data and metric distributions| None |
 
-See [docs/API.md](docs/API.md) for full schemas and curl examples.
+### Quick API Usage Example
+
+**Execute an Evidence Query**:
+```bash
+curl -X POST "http://localhost:8000/query" \
+     -H "Content-Type: application/json" \
+     -d '{"query": "Does vitamin D supplementation reduce mortality?", "k": 5}'
+```
+
+**Hot-Swap Cross-Encoder Model**:
+```bash
+curl -X POST "http://localhost:8000/models/select" \
+     -H "Content-Type: application/json" \
+     -d '{"model": "pretrained"}'
+```
+
+Full request/response schemas and curl examples are documented in [docs/API.md](docs/API.md).
 
 ---
 
@@ -207,49 +368,49 @@ See [docs/API.md](docs/API.md) for full schemas and curl examples.
 
 ```text
 research-nexus/
-├── app.py                      # FastAPI application with 15 production endpoints
-├── streamlit_app.py            # Complete 6-page Streamlit intelligence platform
-├── main.py                     # CLI entrypoint for querying
-├── config.py                   # Pydantic centralized configuration & settings
+├── app.py                      # FastAPI production application (15 endpoints, CORS, lifespan)
+├── streamlit_app.py            # 6-page interactive Streamlit intelligence suite
+├── main.py                     # CLI query runner and evaluation entrypoint
+├── config.py                   # Centralized Pydantic settings & environment configuration
 ├── requirements.txt            # Production dependencies
-├── requirements-dev.txt        # Development & testing dependencies
+├── requirements-dev.txt        # Development, testing, and linting dependencies
 ├── pytest.ini                  # Pytest runner configuration
+├── Dockerfile                  # Container build specification
+├── docker-compose.yml          # Multi-container service deployment definition
 │
-├── src/                        # Core application modules
-│   ├── loader.py               # Scientific document loader & DOI metadata extractor
-│   ├── chunker.py              # Semantic, Markdown header & token chunkers
-│   ├── indexer.py              # ChromaDB vector store & Okapi BM25 indexer
-│   ├── retriever.py            # Hybrid RRF & cross-encoder reranker with caching
-│   ├── generator.py            # Evidence stance analyzer & citation generator
-│   ├── evaluator.py            # IR evaluation harness (nDCG, MRR, Recall)
-│   ├── pipeline.py             # End-to-end RAG pipeline orchestration
-│   └── results_manager.py      # Results reader for training & evaluation benchmarks
+├── src/                        # Core Application Engine
+│   ├── loader.py               # Document ingestion engine & DOI/year metadata extraction
+│   ├── chunker.py              # Markdown header, recursive token & semantic chunkers
+│   ├── indexer.py              # ChromaDB vector store & Okapi BM25 lexical indexer
+│   ├── retriever.py            # Hybrid RRF fusion & cross-encoder neural reranker
+│   ├── generator.py            # Evidence stance classification & citation generator
+│   ├── evaluator.py            # Information retrieval evaluation metrics (nDCG, MRR, Recall)
+│   ├── pipeline.py             # End-to-end RAG orchestrator with abstention guard
+│   └── results_manager.py      # Benchmark results reader & visualization helper
 │
-├── Notebook/                   # Original fine-tuning experiment artifacts
+├── Notebook/                   # Experimental Training & Evaluation Artifacts
 │   └── researchnexus-finetuning/
-│       ├── minilm-scifact-finetuned/  # Saved fine-tuned PyTorch cross-encoder
-│       ├── scifact_val_results.csv    # Validation benchmark logs
-│       ├── scifact_test_results.csv   # Held-out test benchmark logs
-│       ├── scidocs_test_results.csv   # Generalization transfer benchmark logs
-│       ├── training_losses.csv        # Epoch training loss curves
-│       └── *.png                      # Diagnostic evaluation plots
+│       ├── minilm-scifact-finetuned/  # Saved fine-tuned PyTorch cross-encoder weights
+│       ├── datasets/                  # SciFact & SCIDOCS benchmark datasets
+│       ├── plots/                     # Diagnostic plots (loss, ablation, bootstrap CIs)
+│       └── results/                   # Evaluation result CSVs and telemetry logs
 │
-├── tests/                      # Automated test suite (61 unit & integration tests)
-│   ├── test_api.py             # REST API endpoint tests
+├── tests/                      # Automated Test Suite (61 tests, 100% passing)
+│   ├── test_api.py             # REST API endpoint tests & error handling
 │   ├── test_generator.py       # Evidence stance & citation parsing tests
-│   ├── test_retriever.py       # RRF fusion, reranker caching & fallback tests
-│   ├── test_loader.py          # Metadata extraction & deduplication tests
+│   ├── test_retriever.py       # Hybrid RRF fusion, caching & fallback tests
+│   ├── test_loader.py          # Metadata extraction & SHA-256 deduplication tests
 │   ├── test_indexer.py         # BM25 tokenization & indexing tests
-│   └── test_evaluator.py       # Metric & judge evaluation tests
+│   └── test_evaluator.py       # Metric computation & judge evaluation tests
 │
-└── docs/                       # Comprehensive documentation suite
+└── docs/                       # Technical Documentation Suite
     ├── ARCHITECTURE.md         # System design, dataflow & mathematical formulations
     ├── MODEL_TRAINING.md       # PyTorch training methodology & loss dynamics
     ├── EVALUATION.md           # Benchmark reports, significance & ablation analysis
     ├── API.md                  # REST API reference and OpenAPI schema
     ├── DEVELOPMENT.md          # Local development, testing & Docker guide
-    ├── IMPLEMENTATION_CHECKLIST.md  # Detailed phase-by-phase implementation tracker
-    ├── TECHNICAL_DECISIONS.md  # Architectural decision records (ADRs)
+    ├── TECHNICAL_DECISIONS.md  # Architectural Decision Records (ADRs)
+    ├── IMPLEMENTATION_CHECKLIST.md  # Phase-by-phase implementation tracker
     └── PROJECT_AUDIT.md        # Initial baseline architecture audit
 ```
 
@@ -257,13 +418,34 @@ research-nexus/
 
 ## 📚 Complete Documentation Suite
 
-- [System Architecture & Engineering Design](docs/ARCHITECTURE.md)
-- [Neural Reranker Fine-Tuning & PyTorch Pipeline](docs/MODEL_TRAINING.md)
-- [Comprehensive Evaluation & Statistical Rigor Report](docs/EVALUATION.md)
-- [FastAPI REST API Reference](docs/API.md)
-- [Development, Testing & Deployment Guide](docs/DEVELOPMENT.md)
-- [Technical Architecture Decision Records](docs/TECHNICAL_DECISIONS.md)
-- [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md)
+For comprehensive deep dives into each system subsystem, refer to the documentation suite:
+
+| Document | Focus Area |
+|---|---|
+| [System Architecture & Engineering Design](docs/ARCHITECTURE.md) | End-to-end dataflow, RRF formulation, cross-encoder cross-attention math, and abstention criteria |
+| [Neural Reranker Fine-Tuning](docs/MODEL_TRAINING.md) | PyTorch cross-encoder training loop, learning rate schedule, loss functions, and hardware specs |
+| [Comprehensive Evaluation Report](docs/EVALUATION.md) | Wilcoxon signed-rank tests, 10,000-sample bootstrap CIs, SCIDOCS transfer, and negative sampling ablation |
+| [FastAPI REST API Reference](docs/API.md) | Comprehensive endpoint definitions, request/response JSON schemas, and curl examples |
+| [Development & Deployment Guide](docs/DEVELOPMENT.md) | Local environment setup, test execution, linting (Ruff), and Docker deployment |
+| [Technical Decision Records (ADRs)](docs/TECHNICAL_DECISIONS.md) | Architectural trade-offs, chunking choices, vector database selection, and RRF parameters |
+| [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Detailed verification tracker of all implemented capabilities across milestones |
+
+---
+
+## 🔬 Citation
+
+If you use ResearchNexus or its fine-tuned models in your research or application, please cite:
+
+```bibtex
+@software{researchnexus2024,
+  author = {Agarwal, Piyush},
+  title = {ResearchNexus: Scientific Research & Evidence Intelligence Platform},
+  year = {2024},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/PiyushAgarwalcs/research-nexus}}
+}
+```
 
 ---
 

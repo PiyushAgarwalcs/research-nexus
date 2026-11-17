@@ -46,8 +46,8 @@ from langchain_community.retrievers import BM25Retriever  # noqa: E402
 from config import settings  # noqa: E402
 from src.chunker import Chunker  # noqa: E402
 from src.evaluator import evidence_ranks, retrieval_scores  # noqa: E402
-from src.indexer import bm25_tokenize, indexer  # noqa: E402
-from src.loader import multiloader  # noqa: E402
+from src.indexer import Indexer, bm25_tokenize  # noqa: E402
+from src.loader import MultiLoader  # noqa: E402
 from src.retriever import HybridRetriever, _RERANKER_MODEL, _load_cross_encoder  # noqa: E402
 
 RESULTS_CSV = os.path.join(REPO_ROOT, "results", "retrieval_eval.csv")
@@ -75,7 +75,7 @@ def build_indexes(documents, strategy, need_dense, embeddings):
         chunks.extend(chunker.chunk_documents(doc.page_content, doc.metadata, strategy=strategy))
 
     if need_dense:
-        idx = indexer()
+        idx = Indexer(embedding_fn=embeddings)
         persist_dir = os.path.join(REPO_ROOT, f"chroma_retrieval_eval_{strategy}")
         vectorstore, bm25 = idx.create_indexes(chunks, persist_directory=persist_dir)
     else:
@@ -122,16 +122,16 @@ def main():
     load_dotenv()
     with open(args.dataset, "r", encoding="utf-8") as f:
         cases = [c for c in json.load(f) if c.get("evidence")]
-    documents = multiloader(args.data_dir)._document_loader()
+    documents = MultiLoader(args.data_dir).load_documents()
     if not documents:
         raise SystemExit(f"No documents in {args.data_dir}. Run scripts/fetch_corpus.py first.")
 
     need_dense = "Semantic" in args.strategies or any(m != "sparse" for m in args.modes)
     embeddings = None
     if need_dense:
-        from langchain_openai import OpenAIEmbeddings
+        from src.models import get_embeddings
 
-        embeddings = OpenAIEmbeddings(model=settings.embedding_model)
+        embeddings = get_embeddings()
 
     reranker_flags = {"on": [True], "off": [False], "both": [False, True]}[args.reranker]
     cross_encoder = _load_cross_encoder(_RERANKER_MODEL) if True in reranker_flags else None

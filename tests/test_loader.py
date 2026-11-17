@@ -1,8 +1,8 @@
-from src.loader import multiloader
+from src.loader import MultiLoader
 
 
 def test_normalize_text_collapses_whitespace_but_keeps_line_breaks():
-    loader = multiloader(".")
+    loader = MultiLoader(".")
 
     assert loader._normalize_text("  Hello \n\n  world \t!  ") == "Hello\n\nworld !"
     assert loader._normalize_text("a\r\n\r\n\r\n\nb") == "a\n\nb"
@@ -17,7 +17,7 @@ def test_loaded_markdown_still_splits_on_headers(tmp_path):
         "# Title\n\nIntro text.\n\n## Section A\n\nAlpha.\n\n## Section B\n\nBeta.\n",
         encoding="utf-8",
     )
-    doc = multiloader(str(tmp_path))._document_loader()[0]
+    doc = MultiLoader(str(tmp_path)).load_documents()[0]
 
     chunks = Chunker(embedding_fn=None).chunk_documents(
         doc.page_content, doc.metadata, strategy="Markdown"
@@ -27,21 +27,21 @@ def test_loaded_markdown_still_splits_on_headers(tmp_path):
     assert all(c.metadata["Header 1"] == "Title" for c in chunks)
 
 
-def test_document_loader_returns_files_in_sorted_order(tmp_path):
+def test_load_documents_returns_files_in_sorted_order(tmp_path):
     for name in ["c.txt", "a.txt", "b.txt"]:
         (tmp_path / name).write_text(name, encoding="utf-8")
 
-    documents = multiloader(str(tmp_path))._document_loader()
+    documents = MultiLoader(str(tmp_path)).load_documents()
 
     assert [d.metadata["filename"] for d in documents] == ["a.txt", "b.txt", "c.txt"]
 
 
-def test_document_loader_reads_supported_files_and_skips_others(tmp_path):
+def test_load_documents_reads_supported_files_and_skips_others(tmp_path):
     (tmp_path / "note.txt").write_text("Hello   world", encoding="utf-8")
     (tmp_path / "ignored.bin").write_bytes(b"\x00\x01")
 
-    loader = multiloader(str(tmp_path))
-    documents = loader._document_loader()
+    loader = MultiLoader(str(tmp_path))
+    documents = loader.load_documents()
 
     assert len(documents) == 1
     assert documents[0].page_content == "Hello world"
@@ -52,7 +52,7 @@ def test_process_file_returns_none_for_empty_file(tmp_path):
     empty_file = tmp_path / "empty.txt"
     empty_file.write_text("", encoding="utf-8")
 
-    loader = multiloader(str(tmp_path))
+    loader = MultiLoader(str(tmp_path))
     assert loader._process_file(str(empty_file)) is None
 
 
@@ -71,7 +71,7 @@ Genomics has witnessed exponential data growth...
     doc_path = tmp_path / "paper.md"
     doc_path.write_text(paper_content, encoding="utf-8")
 
-    loader = multiloader(str(tmp_path))
+    loader = MultiLoader(str(tmp_path))
     doc = loader.load_file(str(doc_path))
 
     assert doc is not None
@@ -89,8 +89,8 @@ def test_deduplication_filters_duplicate_content(tmp_path):
     (tmp_path / "copy1.txt").write_text(content, encoding="utf-8")
     (tmp_path / "copy2.txt").write_text(content, encoding="utf-8")
 
-    loader = multiloader(str(tmp_path))
-    docs = loader._document_loader(deduplicate=True)
+    loader = MultiLoader(str(tmp_path))
+    docs = loader.load_documents(deduplicate=True)
 
     # Should only keep 1 copy because the content hash matches
     assert len(docs) == 1

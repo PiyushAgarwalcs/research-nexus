@@ -1,12 +1,12 @@
 from langchain_core.documents import Document
 
-from src.indexer import indexer
+from src.indexer import Indexer
 
 
 def _make_indexer():
-    """Build an indexer without running __init__, so no embeddings client
+    """Build an Indexer without running __init__, so no embeddings client
     (and therefore no API key) is required."""
-    return object.__new__(indexer)
+    return object.__new__(Indexer)
 
 
 def test_prepare_metadata_assigns_per_file_chunk_index():

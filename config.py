@@ -45,8 +45,15 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
 
     # --- Models (main.py, src/indexer.py, src/evaluator.py) ---
+    llm_provider: str = "groq"
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_api_base: str = "https://api.groq.com/openai/v1"
     generator_model: str = "gpt-4o-mini"
     judge_model: str = "gpt-4o-mini"
+
+    # --- Embeddings (local HuggingFace / SentenceTransformers or OpenAI) ---
+    embedding_provider: str = "local"
+    local_embedding_model: str = "all-MiniLM-L6-v2"
     embedding_model: str = "text-embedding-3-small"
 
     # --- Reranker model selection ---

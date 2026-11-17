@@ -16,20 +16,20 @@ Endpoints:
 
 import logging
 import os
-import shutil
 import statistics
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 import tiktoken
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from config import RerankerModel, settings
-from src.loader import multiloader
+from config import settings
+from src.loader import MultiLoader
 from src.pipeline import build_pipeline
 from src.results_manager import results_manager
 
@@ -68,7 +68,10 @@ def _count_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-_metrics: Dict[str, List[float]] = {"latency_ms": [], "cost_usd": []}
+_metrics: Dict[str, deque] = {
+    "latency_ms": deque(maxlen=1000),
+    "cost_usd": deque(maxlen=1000),
+}
 _state: Dict[str, Any] = {"pipeline": None}
 
 
@@ -84,7 +87,7 @@ def _estimate_cost_usd(prompt_text: str, completion_text: str) -> float:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
     data_dir = os.getenv("DATA_DIR", settings.data_dir)
     os.makedirs(data_dir, exist_ok=True)
 
@@ -102,7 +105,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Pipeline deferred initialization: %s", e)
     else:
-        logger.warning("OPENAI_API_KEY not set. Pipeline will initialize upon key configuration.")
+        logger.warning("Neither GROQ_API_KEY nor OPENAI_API_KEY set. Pipeline will initialize upon key configuration.")
 
     yield
 
@@ -253,7 +256,9 @@ def query(request: QueryRequest) -> QueryResponse:
     if not request.query or not request.query.strip():
         raise HTTPException(status_code=400, detail="query must be a non-empty string.")
 
-    # Apply temporary reranker override if requested
+    # NOTE: In a multi-worker deployment, switching the retriever model on a shared
+    # singleton pipeline is not thread-safe. A per-request retriever or thread lock
+    # should be used if serving concurrent requests with different model overrides.
     if request.reranker_model and hasattr(pipeline, "retriever"):
         try:
             pipeline.retriever.switch_reranker(request.reranker_model)
@@ -306,8 +311,8 @@ def list_documents() -> List[DocumentInfo]:
     if not os.path.exists(data_dir):
         return []
 
-    loader = multiloader(data_dir)
-    documents = loader._document_loader(deduplicate=False)
+    loader = MultiLoader(data_dir)
+    documents = loader.load_documents(deduplicate=False)
     results = []
     for doc in documents:
         m = doc.metadata
@@ -354,7 +359,7 @@ async def upload_document(file: UploadFile = File(...)) -> Dict[str, Any]:
             buffer.write(chunk)
 
     # Validate and inspect scientific metadata
-    loader = multiloader(data_dir)
+    loader = MultiLoader(data_dir)
     doc = loader.load_file(destination)
     if not doc:
         if os.path.exists(destination):
@@ -385,9 +390,12 @@ def delete_document(filename: str) -> Dict[str, str]:
 @app.post("/documents/index")
 def trigger_index() -> Dict[str, Any]:
     load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY not configured.")
+        raise HTTPException(
+            status_code=400,
+            detail="Neither GROQ_API_KEY nor OPENAI_API_KEY is configured.",
+        )
 
     data_dir = os.getenv("DATA_DIR", settings.data_dir)
     try:

@@ -8,57 +8,91 @@ This document details the complete end-to-end architecture, mathematical formula
 
 ResearchNexus is designed around a multi-stage, evidence-first Retrieval-Augmented Generation (RAG) pipeline optimized specifically for scientific literature. The system guarantees verifiable citations, transparent stance analysis, and strict abstention when empirical evidence is insufficient.
 
-```
-                              [ Scientific Corpus ]
-                       (PDF, Markdown, HTML, TXT, SciFact)
-                                       │
-                                       ▼
-                         [ Document Ingestion Engine ]
-                     - Title, Abstract, DOI, Year, Authors
-                     - SHA-256 Content Deduplication
-                     - Hierarchy & Section Preservation
-                                       │
-                                       ▼
-                        [ Dual-Index Representation ]
-               ┌───────────────────────┴───────────────────────┐
-               ▼                                               ▼
-       [ Dense Vector Index ]                         [ BM25 Lexical Index ]
-      - ChromaDB Collection                          - Rank-BM25 (k1=1.5, b=0.75)
-      - text-embedding-3-small (1536-dim)            - In-memory Okapi BM25
-      - Cosine Similarity Matching                   - Stemmed Token Inverted Index
-               │                                               │
-               └───────────────────────┬───────────────────────┘
-                                       │
-                                       ▼
-                       [ Reciprocal Rank Fusion (RRF) ]
-                          RRF_score(d) = Σ w_s / (k + rank_s(d))
-                                       │
-                                       ▼
-                         [ Top-N Candidates Pool ]
-                                 (k=20-60)
-                                       │
-                                       ▼
-                     [ Cross-Encoder Neural Reranking ]
-                        Active Model Selection:
-                        - MiniLM-L6-SciFact (Fine-tuned)
-                        - ms-marco-MiniLM-L-6-v2 (Pretrained)
-                                       │
-                                       ▼
-                      [ Top-K Ranked Evidence Passages ]
-                                  (k=3-5)
-                                       │
-                                       ▼
-                     [ Scientific Evidence Analyzer ]
-                   - Stance Detection: SUPPORT | CONTRADICT | NEUTRAL | UNCERTAIN
-                   - Confidence Score (0.00 - 1.00)
-                   - Claim-to-Passage Semantic Grounding
-                                       │
-                                       ▼
-                     [ Synthesizer & Citation Engine ]
-                   - Context-Grounded Answer Generation
-                   - Bracketed Citation Injection [1], [2]
-                   - Exact Provenance & Verification
-                   - Abstention Trigger if Insufficient
+```mermaid
+flowchart TD
+    %% Global Styling
+    classDef corpus fill:#e8f0fe,stroke:#4285f4,stroke-width:2px,color:#1a73e8;
+    classDef process fill:#f8f9fa,stroke:#5f6368,stroke-width:1.5px,color:#202124;
+    classDef index fill:#fef7e0,stroke:#f9ab00,stroke-width:2px,color:#b06000;
+    classDef model fill:#e6f4ea,stroke:#34a853,stroke-width:2px,color:#137333;
+    classDef decision fill:#fce8e6,stroke:#ea4335,stroke-width:2px,color:#c5221f;
+    classDef output fill:#f3e8fd,stroke:#a142f4,stroke-width:2px,color:#8430ce;
+
+    subgraph INGESTION["1. Document Ingestion & Chunking Pipeline (Offline / Async)"]
+        direction TB
+        RAW["📄 Scientific Corpus<br/>(PDF, Markdown, HTML, TXT, SciFact JSON)"]:::corpus
+        PREPROC["⚙️ Ingestion & Metadata Extractor<br/>• DOI Regex & Metadata Extraction<br/>• SHA-256 Content Deduplication<br/>• Section Hierarchy Preservation"]:::process
+        CHUNK["✂️ Multi-Strategy Chunking<br/>• Markdown Header Chunking<br/>• Recursive Token Chunking (512 tok, overlap 50)<br/>• Semantic Embedding Chunking"]:::process
+        RAW --> PREPROC --> CHUNK
+    end
+
+    subgraph DUAL_INDEX["2. Dual-Index Hybrid Representation"]
+        direction LR
+        DENSE_IDX[("🗄️ Dense Vector Store<br/>ChromaDB Collection<br/>text-embedding-3-small<br/>1536-dim Cosine Metric")]:::index
+        SPARSE_IDX[("📚 Lexical Index<br/>Okapi BM25 Index<br/>Normalized & Stemmed<br/>k1=1.5, b=0.75")]:::index
+    end
+    CHUNK --> DENSE_IDX
+    CHUNK --> SPARSE_IDX
+
+    subgraph QUERY_FLOW["3. Online Hybrid Retrieval & Neural Reranking"]
+        direction TB
+        USER_Q["🔎 User Query / Scientific Claim"]:::corpus
+
+        USER_Q -->|Dense Embedding| DENSE_SEARCH["Dense Semantic Retrieval<br/>Top-K Candidate Pool"]:::process
+        USER_Q -->|Normalized Tokens| SPARSE_SEARCH["Lexical BM25 Retrieval<br/>Top-K Candidate Pool"]:::process
+
+        DENSE_SEARCH -.-> DENSE_IDX
+        SPARSE_SEARCH -.-> SPARSE_IDX
+
+        RRF["🔀 Reciprocal Rank Fusion (RRF)<br/>RRF(d) = Σ w_s / (k + rank_s(d))<br/>Dense: 0.7 • Sparse: 0.3 • k=60"]:::process
+
+        DENSE_SEARCH --> RRF
+        SPARSE_SEARCH --> RRF
+
+        CANDIDATES["📋 Top-N Candidates Pool<br/>(N = 20 - 60 candidate passages)"]:::process
+        RRF --> CANDIDATES
+
+        subgraph RERANKER["Cross-Encoder Neural Reranking Stage"]
+            direction TB
+            SWITCH{"Dynamic Model Selector<br/>(Runtime Swappable)"}:::model
+            FT_MODEL["⭐ minilm-scifact-finetuned<br/>Fine-Tuned on SciFact Contrastive Pairs<br/>(+0.0382 nDCG@10, p &lt; 0.001)"]:::model
+            PT_MODEL["ms-marco-MiniLM-L-6-v2<br/>Pretrained General Baseline"]:::model
+            SWITCH -->|Default Active| FT_MODEL
+            SWITCH -.->|A/B Eval Toggle| PT_MODEL
+        end
+
+        CANDIDATES --> SWITCH
+        FT_MODEL --> TOP_K["🏆 Top-K Evidence Passages<br/>(Calibrated Logits & Ranked Passages)"]:::process
+        PT_MODEL -.-> TOP_K
+    end
+
+    subgraph EVIDENCE_ANALYSIS["4. Scientific Evidence Analysis & Abstention Protocol"]
+        direction TB
+        STANCE["⚖️ Scientific Evidence Stance Analyzer<br/>• SUPPORT (confirms claim with data)<br/>• CONTRADICT (refutes claim directly)<br/>• NEUTRAL (topical without verdict)<br/>• UNCERTAIN (conflicting / inconclusive)"]:::process
+
+        CONF_GUARD{"🛡️ Confidence & Abstention Guard<br/>Max Reranker Score ≥ Threshold?<br/>Empirical Evidence Sufficient?"}:::decision
+
+        ABSTAIN["🚫 Explicit Insufficient-Evidence Abstention<br/>• Transparent Abstention Rationale<br/>• Alternative Search Recommendations"]:::decision
+
+        SYNTHESIS["📝 Synthesizer & Citation Engine<br/>• Context-Grounded Answer Generation<br/>• Verified Bracketed Citations [1], [2]<br/>• Exact DOI & Section Provenance Tracking"]:::output
+
+        TOP_K --> STANCE --> CONF_GUARD
+        CONF_GUARD -->|No / Low Confidence| ABSTAIN
+        CONF_GUARD -->|Yes / Grounded| SYNTHESIS
+    end
+
+    subgraph CLIENTS["5. Presentation & Integration Layer"]
+        direction LR
+        UI["🖥️ Streamlit Intelligence Workspace<br/>(6-Page Interactive Dashboard)"]:::output
+        API["⚡ FastAPI Production Server<br/>(15 REST Endpoints + OpenAPI Docs)"]:::output
+        CLI["💻 CLI Query Runner<br/>(main.py script)"]:::output
+    end
+
+    SYNTHESIS --> UI
+    SYNTHESIS --> API
+    SYNTHESIS --> CLI
+    ABSTAIN --> UI
+    ABSTAIN --> API
 ```
 
 ---

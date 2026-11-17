@@ -32,10 +32,10 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
 from dotenv import load_dotenv  # noqa: E402
-from langchain_openai import ChatOpenAI  # noqa: E402
 
 from config import settings  # noqa: E402
 from src.evaluator import RAGEvaluator  # noqa: E402
+from src.models import get_llm  # noqa: E402
 from src.pipeline import build_pipeline  # noqa: E402
 
 RESULTS_DIR = os.path.join(REPO_ROOT, "results")
@@ -46,9 +46,12 @@ PERSIST_DIR = os.path.join(REPO_ROOT, "chroma_judge_validation_db")
 
 def generate_template(data_dir="./data/", dataset_path=DATASET_PATH):
     load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise SystemExit("OPENAI_API_KEY not set.")
+        raise SystemExit(
+            "Neither GROQ_API_KEY nor OPENAI_API_KEY set. "
+            "Please configure GROQ_API_KEY in .env to run 100% free with Groq."
+        )
     if not os.path.exists(dataset_path):
         raise SystemExit(
             f"{dataset_path} not found. Generate the frozen eval set first "
@@ -63,8 +66,7 @@ def generate_template(data_dir="./data/", dataset_path=DATASET_PATH):
         openai_api_key=api_key, data_dir=data_dir, persist_directory=PERSIST_DIR
     )
 
-    judge_llm = ChatOpenAI(
-        model=settings.judge_model,
+    judge_llm = get_llm(
         temperature=settings.judge_temperature,
         api_key=api_key,
     )

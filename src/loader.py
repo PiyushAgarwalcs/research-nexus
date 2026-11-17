@@ -93,12 +93,12 @@ def extract_scientific_metadata(
     return meta
 
 
-class multiloader:
+class MultiLoader:
     def __init__(self, path: str):
         self.path = path
         self.errors: List[Dict[str, str]] = []
 
-    def _document_loader(self, deduplicate: bool = True) -> List[Document]:
+    def load_documents(self, deduplicate: bool = True) -> List[Document]:
         documents: List[Document] = []
         seen_hashes = set()
 

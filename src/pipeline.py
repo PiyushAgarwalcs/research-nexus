@@ -8,23 +8,22 @@ callers can still override anything they need to.
 """
 
 import logging
-
+import os
 from typing import Optional, Union
-
-from langchain_openai import ChatOpenAI
 
 from config import RerankerModel, settings
 from src.chunker import Chunker
 from src.generator import AdvancedRAGSystem
-from src.indexer import indexer
-from src.loader import multiloader
+from src.indexer import Indexer
+from src.loader import MultiLoader
+from src.models import get_llm
 from src.retriever import HybridRetriever
 
 logger = logging.getLogger(__name__)
 
 
 def build_pipeline(
-    openai_api_key: str,
+    openai_api_key: Optional[str] = None,
     data_dir: str = "./data/",
     persist_directory: str = "./chroma_main_db",
     chunking_strategy: str = "TokenRecursive",
@@ -41,11 +40,15 @@ def build_pipeline(
     with the selected reranker), and returns an AdvancedRAGSystem ready to
     call `generate_robust_answer(query)` on.
     """
-    if not openai_api_key:
-        raise ValueError("openai_api_key must be a non-empty string.")
+    key = openai_api_key or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise ValueError(
+            "No API key provided. Please configure GROQ_API_KEY (for 100% free Groq) "
+            "or OPENAI_API_KEY in your .env file."
+        )
 
-    loader = multiloader(data_dir)
-    all_documents = loader._document_loader(deduplicate=True)
+    loader = MultiLoader(data_dir)
+    all_documents = loader.load_documents(deduplicate=True)
     if not all_documents:
         raise ValueError(
             f"No documents loaded from {data_dir!r}. Run `python scripts/fetch_corpus.py` to download the default corpus or upload papers."
@@ -64,7 +67,7 @@ def build_pipeline(
         )
     logger.info("Produced %d chunk(s) using the %r strategy", len(all_chunks), chunking_strategy)
 
-    idx = indexer(api_key=openai_api_key)
+    idx = Indexer(api_key=key)
     vectorstore, bm25_retriever = idx.create_indexes(
         all_chunks, persist_directory=persist_directory
     )
@@ -78,10 +81,9 @@ def build_pipeline(
         reranker_model=reranker_model,
     )
 
-    generator_llm = ChatOpenAI(
-        model=settings.generator_model,
+    generator_llm = get_llm(
         temperature=settings.generator_temperature,
-        api_key=openai_api_key,
+        api_key=key,
     )
 
     return AdvancedRAGSystem(llm=generator_llm, retriever=retriever)

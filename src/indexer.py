@@ -3,9 +3,9 @@ from collections import defaultdict
 
 from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
-from langchain_openai import OpenAIEmbeddings
 
 from config import settings
+from src.models import get_embeddings
 
 
 def bm25_tokenize(text):
@@ -21,11 +21,12 @@ def bm25_tokenize(text):
     return re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", text.lower())
 
 
-class indexer:
-    def __init__(self, api_key=None, model_name=settings.embedding_model):
-        # OpenAIEmbeddings reads OPENAI_API_KEY from the environment
-        # automatically (populated by load_dotenv() in the entry point).
-        self.embeddings = OpenAIEmbeddings(model=model_name)
+class Indexer:
+    def __init__(self, api_key=None, model_name=None, embedding_fn=None):
+        if embedding_fn is not None:
+            self.embeddings = embedding_fn
+        else:
+            self.embeddings = get_embeddings(model_name)
 
     def _prepare_metadata(self, chunks):
         file_chunk_counters = defaultdict(int)

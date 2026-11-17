@@ -8,14 +8,14 @@ import time
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from config import settings
 from src.chunker import Chunker
 from src.evaluator import RAGEvaluator, SyntheticEvaluator
 from src.generator import AdvancedRAGSystem
-from src.indexer import indexer
-from src.loader import multiloader
+from src.indexer import Indexer
+from src.loader import MultiLoader
+from src.models import get_embeddings, get_llm
 from src.retriever import HybridRetriever
 
 logging.basicConfig(
@@ -76,7 +76,7 @@ def _append_strategy_result(row, csv_path=STRATEGY_CSV):
     df_row.to_csv(csv_path, mode="a", header=not file_exists, index=False)
 
 
-def run_strategy_comparison_once(gitlab_documents, dataset_path, llm, judge_llm, api_key, run_idx=1):
+def run_strategy_comparison_once(documents, dataset_path, llm, judge_llm, api_key, run_idx=1):
     """Run the chunking-strategy comparison a single time, saving each
     strategy's row to STRATEGY_CSV immediately after it completes (not just
     at the end) and skipping any (strategy, run_idx) already present there,
@@ -90,7 +90,7 @@ def run_strategy_comparison_once(gitlab_documents, dataset_path, llm, judge_llm,
     strategies = ["TokenRecursive", "Markdown", "Semantic"]
     done = _load_completed_strategy_cells()
 
-    embeddings = OpenAIEmbeddings(model=settings.embedding_model)
+    embeddings = get_embeddings()
 
     for strategy in strategies:
         if (strategy, run_idx) in done:
@@ -103,13 +103,13 @@ def run_strategy_comparison_once(gitlab_documents, dataset_path, llm, judge_llm,
 
         chunker = Chunker(embedding_fn=embeddings)
         all_chunks = []
-        for doc in gitlab_documents:
+        for doc in documents:
             chunks = chunker.chunk_documents(
                 doc.page_content, doc.metadata, strategy=strategy
             )
             all_chunks.extend(chunks)
 
-        idx = indexer(api_key=api_key)
+        idx = Indexer(embedding_fn=embeddings)
         vectorstore, bm25 = idx.create_indexes(all_chunks, persist_directory=db_path)
 
         retriever = HybridRetriever(vectorstore=vectorstore, bm25_retriever=bm25)
@@ -141,7 +141,7 @@ _METRIC_COLUMNS = [
 
 
 def run_strategy_comparison(
-    gitlab_documents, dataset_path, llm, judge_llm, api_key, runs=1
+    documents, dataset_path, llm, judge_llm, api_key, runs=1
 ):
     """Run the chunking-strategy comparison `runs` times (resuming any cells
     already saved to STRATEGY_CSV from a prior, interrupted invocation) and
@@ -153,7 +153,7 @@ def run_strategy_comparison(
     for run_idx in range(1, runs + 1):
         print(f"\n--- Strategy comparison run {run_idx}/{runs} ---")
         run_strategy_comparison_once(
-            gitlab_documents, dataset_path, llm, judge_llm, api_key, run_idx=run_idx
+            documents, dataset_path, llm, judge_llm, api_key, run_idx=run_idx
         )
 
     # Always recompute the aggregate from disk (not from in-memory results),
@@ -253,25 +253,26 @@ if __name__ == "__main__":
     args = parse_args()
 
     load_dotenv()
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    if not OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY environment variable not set.")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "Neither GROQ_API_KEY nor OPENAI_API_KEY environment variable is set. "
+            "Please configure GROQ_API_KEY in your .env file to run 100% free."
+        )
 
-    generator_llm = ChatOpenAI(
-        model=settings.generator_model,
+    generator_llm = get_llm(
         temperature=settings.generator_temperature,
-        api_key=OPENAI_API_KEY,
+        api_key=api_key,
     )
 
-    judge_llm = ChatOpenAI(
-        model=settings.judge_model,
+    judge_llm = get_llm(
         temperature=settings.judge_temperature,
-        api_key=OPENAI_API_KEY,
+        api_key=api_key,
     )
 
     dataset_path = args.data_dir
-    loader = multiloader(dataset_path)
-    all_documents = loader._document_loader()
+    loader = MultiLoader(dataset_path)
+    all_documents = loader.load_documents()
     subset_all_documents = all_documents[:50]
 
     if not subset_all_documents:
@@ -289,7 +290,7 @@ if __name__ == "__main__":
             )
             all_chunks.extend(chunks)
 
-        idx = indexer(api_key=OPENAI_API_KEY)
+        idx = Indexer()
         vectorstore, bm25 = idx.create_indexes(
             all_chunks, persist_directory="./chroma_main_db"
         )
@@ -326,10 +327,10 @@ if __name__ == "__main__":
         if args.runs > 0:
             print(f"\n--- Running Strategy Comparison ({args.runs} run(s)) ---")
             comparison_report = run_strategy_comparison(
-                gitlab_documents=subset_all_documents,
+                documents=subset_all_documents,
                 dataset_path=dataset_path,
                 llm=generator_llm,
                 judge_llm=judge_llm,
-                api_key=OPENAI_API_KEY,
+                api_key=api_key,
                 runs=args.runs,
             )

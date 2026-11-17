@@ -15,21 +15,20 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
-from langchain_openai import OpenAIEmbeddings
 
-from config import settings
 from src.chunker import Chunker
-from src.indexer import indexer
-from src.loader import multiloader
+from src.indexer import Indexer
+from src.loader import MultiLoader
+from src.models import get_embeddings
 
 
-def build_index(data_dir: str, persist_dir: str, strategy: str, api_key: str) -> int:
-    loader = multiloader(data_dir)
-    documents = loader._document_loader()
+def build_index(data_dir: str, persist_dir: str, strategy: str, api_key: str = None) -> int:
+    loader = MultiLoader(data_dir)
+    documents = loader.load_documents()
     if not documents:
         raise SystemExit(f"No documents found in {data_dir}. Run `python scripts/fetch_corpus.py` to download the default corpus.")
 
-    embedding_fn = OpenAIEmbeddings(model=settings.embedding_model)
+    embedding_fn = get_embeddings()
     chunker = Chunker(embedding_fn=embedding_fn)
     chunks = []
     for doc in documents:
@@ -37,7 +36,7 @@ def build_index(data_dir: str, persist_dir: str, strategy: str, api_key: str) ->
             chunker.chunk_documents(doc.page_content, doc.metadata, strategy=strategy)
         )
 
-    idx = indexer(api_key=api_key)
+    idx = Indexer(embedding_fn=embedding_fn)
     idx.create_indexes(chunks, persist_directory=persist_dir)
 
     print(
@@ -68,8 +67,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     load_dotenv()
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    if not OPENAI_API_KEY:
-        raise SystemExit("OPENAI_API_KEY environment variable not set.")
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
 
-    build_index(args.data_dir, args.persist_dir, args.strategy, OPENAI_API_KEY)
+    build_index(args.data_dir, args.persist_dir, args.strategy, api_key)
