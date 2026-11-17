@@ -45,7 +45,9 @@
 
 ## 🏗️ System Architecture
 
-ResearchNexus separates the **Offline Document Ingestion & Indexing Pipeline** from the **Online Multi-Stage Evidence Retrieval & Synthesis Engine**:
+![ResearchNexus System Architecture](assets/flowgraph.png)
+
+ResearchNexus coordinates an **Offline Document Ingestion & Hybrid Indexing Pipeline** with an **Online Multi-Stage Evidence Retrieval & Synthesis Engine**:
 
 ```mermaid
 flowchart TD
@@ -134,28 +136,45 @@ flowchart TD
     ABSTAIN --> API
 ```
 
-### Architectural Deep Dive
+### End-to-End Architectural Subsystems
 
 1. **Document Ingestion & Metadata Normalization (`src/loader.py`, `src/chunker.py`)**:
-   - Automated extraction of Digital Object Identifiers (DOIs), publication years, authors, and hierarchical section headers (`#`, `##`, `###`).
-   - Content hashing via SHA-256 for deterministic idempotency and duplicate elimination across document batches.
-   - Dual chunking strategy: preserves structured section boundaries for academic papers while supporting recursive token windows (512 tokens, 50-token overlap).
+   - **Multi-Format Ingestion**: Native loaders for PDF, Markdown, HTML, TXT, and SciFact JSON datasets.
+   - **Scientific Metadata Extraction**: Automated extraction of Digital Object Identifiers (DOIs) via regex (`10.\d{4,9}/[-._;()/:A-Za-z0-9]+`), publication years, authors, and hierarchical section headers (`#`, `##`, `###`).
+   - **SHA-256 Deduplication**: Content hashing prevents duplicate indexing across multi-source paper collections ($\text{hash} = \text{SHA256}(\text{normalized\_text})$).
+   - **Adaptive Multi-Strategy Chunking**:
+     - *Markdown Header Chunking*: Splits academic papers along structural headers, preserving section semantic integrity (*Methodology*, *Results*, *Discussion*).
+     - *Recursive Token Chunking*: Sliding window chunking (512 tokens, 50-token overlap).
+     - *Semantic Chunking*: Splits along semantic boundaries based on embedding distance shifts between consecutive sentences.
 
-2. **Dual-Index Hybrid Retrieval (`src/indexer.py`)**:
-   - **Dense Index**: ChromaDB backed by OpenAI `text-embedding-3-small` (1536-dimensional embeddings) with cosine similarity.
-   - **Lexical Index**: In-memory Okapi BM25 (`k1=1.5`, `b=0.75`) with normalized tokenization preserving hyphenated chemical terms and scientific identifiers.
-   - **Reciprocal Rank Fusion**: Merges score-disparate lists using $RRF(d) = \sum_{s} \frac{w_s}{k + \text{rank}_s(d)}$, balancing high-recall dense discovery with precision keyword matches.
+2. **Dual-Index Hybrid Retrieval & Reciprocal Rank Fusion (`src/indexer.py`)**:
+   - **Dense Semantic Index**: ChromaDB backed by OpenAI `text-embedding-3-small` (1536-dimensional embeddings) with cosine similarity metric for conceptual discovery.
+   - **Lexical Index**: In-memory Okapi BM25 (`k1=1.5`, `b=0.75`) with normalized biomedical tokenization preserving exact chemical formulas, acronyms, and gene symbols.
+   - **Weighted Reciprocal Rank Fusion (RRF)**: Merges score-disparate candidate lists using rank reciprocity rather than uncalibrated raw scores:
+     $$\text{RRF\_Score}(d) = w_{\text{dense}} \cdot \frac{1}{k + \text{rank}_{\text{dense}}(d)} + w_{\text{sparse}} \cdot \frac{1}{k + \text{rank}_{\text{sparse}}(d)}$$
+     where $k=60$, $w_{\text{dense}}=0.7$, and $w_{\text{sparse}}=0.3$.
 
 3. **Neural Cross-Encoder Reranking (`src/retriever.py`)**:
-   - Evaluates full token-level cross-attention over query-passage concatenations $[\text{CLS}] \circ Q \circ [\text{SEP}] \circ D \circ [\text{SEP}]$, escaping bi-encoder embedding bottlenecks.
-   - Zero-downtime hot-swapping between `minilm-scifact-finetuned` and `ms-marco-MiniLM-L-6-v2` with LRU caching and CUDA FP16 auto-detection.
+   - Evaluates full token-level cross-attention over query-passage concatenations $[\text{CLS}] \circ Q \circ [\text{SEP}] \circ D \circ [\text{SEP}]$, escaping bi-encoder embedding bottlenecks:
+     $$s(Q, D) = \sigma(\mathbf{W} \cdot \text{Transformer}(\mathbf{x})_{[\text{CLS}]})$$
+   - **Hot-Swappable Model Selector**: Seamless zero-downtime runtime toggling between:
+     - `minilm-scifact-finetuned`: Domain-adapted on scientific claim-evidence pairs (**0.7144 nDCG@10**, $+0.0382$ over baseline, $p = 0.0006$).
+     - `ms-marco-MiniLM-L-6-v2`: General web retrieval baseline (**0.6762 nDCG@10**).
+   - Memory-efficient LRU caching (`@lru_cache(maxsize=4)`) and automatic CPU/CUDA FP16 precision detection.
 
-4. **Evidence Stance Classification & Verification (`src/generator.py`)**:
-   - Decouples relevance scoring from scientific consensus: categorizes evidence into `SUPPORT`, `CONTRADICT`, `NEUTRAL`, or `UNCERTAIN`.
-   - Generates bracketed inline citations (`[1]`, `[2]`) rigorously verified against source chunk IDs, DOIs, and exact string containment.
+4. **Evidence Stance Classification & Consensus Analysis (`src/generator.py`)**:
+   - **Principle**: *Relevance does NOT equal evidence stance.* High cosine similarity passages may confirm or refute a hypothesis.
+   - **Stance Categorization**: Classifies passages into `SUPPORT`, `CONTRADICT`, `NEUTRAL`, or `UNCERTAIN` with calibrated confidence scores and verbatim evidentiary quotes.
+   - **Consensus Aggregation**: Computes overall claim consensus (`SUPPORTED`, `CONTRADICTED`, `CONTESTED`, or `INSUFFICIENT_EVIDENCE`).
 
-5. **Insufficient-Evidence Abstention Protocol (`src/pipeline.py`)**:
-   - Guards against synthetic hallucination when cross-encoder confidence falls below calibrated thresholds or when queries target out-of-corpus topics.
+5. **Verifiable Citation Provenance & Insufficient-Evidence Abstention (`src/pipeline.py`)**:
+   - **Strict Provenance Verification**: Inline bracketed citations (`[1]`, `[2]`) rigorously verified against source chunk IDs, DOIs, and exact string containment:
+     $$\text{Citation Precision} = \frac{\text{Verified Citations}}{\text{Total Citations Generated}}$$
+   - **Calibrated Abstention Guard**: Explicitly abstains when reranker confidence falls below threshold or evidence is insufficient, preventing synthetic hallucinations with transparent rationale and alternative search recommendations.
+
+6. **Production Serving & Dual-Interface Architecture (`app.py`, `streamlit_app.py`)**:
+   - **FastAPI Enterprise Backend**: 15 REST endpoints with hot-swappable model switching, telemetry metrics, and OpenAPI schema documentation at `/docs`.
+   - **Streamlit Intelligence Workspace**: 6-page interactive research dashboard (Executive Dashboard, Research Assistant, Document Library, Evidence Explorer, Model Comparison, Evaluation Suite).
 
 ---
 

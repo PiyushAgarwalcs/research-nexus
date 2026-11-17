@@ -6,6 +6,8 @@ This document details the complete end-to-end architecture, mathematical formula
 
 ## 1. High-Level Architecture Overview
 
+![ResearchNexus System Architecture](../assets/flowgraph.png)
+
 ResearchNexus is designed around a multi-stage, evidence-first Retrieval-Augmented Generation (RAG) pipeline optimized specifically for scientific literature. The system guarantees verifiable citations, transparent stance analysis, and strict abstention when empirical evidence is insufficient.
 
 ```mermaid
