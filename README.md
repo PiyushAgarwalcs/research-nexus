@@ -9,22 +9,25 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-FC521F)](https://www.trychroma.com/)
 [![Tests](https://img.shields.io/badge/pytest-61%20passed%20(100%25)-success?logo=pytest&logoColor=white)](tests/)
+[![CI](https://github.com/PiyushAgarwalcs/research-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/PiyushAgarwalcs/research-nexus/actions/workflows/ci.yml)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Key Features](#-key-features--capabilities) • [Architecture](#%EF%B8%8F-system-architecture) • [Empirical Benchmarks](#-empirical-benchmark-results) • [Quick Start](#-quick-start) • [Streamlit Platform](#%EF%B8%8F-streamlit-intelligence-workspace) • [REST API](#-rest-api-reference) • [Documentation](#-complete-documentation-suite)
+[Key Features](#-key-features--capabilities) • [Architecture](#%EF%B8%8F-system-architecture) • [Benchmarks](#-empirical-benchmark-results) • [Quick Start](#-quick-start) • [Streamlit Platform](#%EF%B8%8F-streamlit-intelligence-workspace) • [REST API](#-rest-api-reference) • [Documentation](#-complete-documentation-suite)
 
 ---
 
-**ResearchNexus** is a production-grade, evidence-grounded scientific literature retrieval, synthesis, and verification platform. Designed to overcome the critical failure modes of conventional RAG (hallucinated citations, conflation of topical relevance with scientific agreement, and false certainty on sparse evidence), ResearchNexus pairs **dual-index hybrid search** (ChromaDB dense vectors + Okapi BM25 lexical search) with a **custom fine-tuned neural cross-encoder reranker** (`minilm-scifact-finetuned`), automated **evidence stance classification** (`SUPPORT`, `CONTRADICT`, `NEUTRAL`, `UNCERTAIN`), strict **citation provenance verification**, and an **insufficient-evidence abstention protocol**.
+**ResearchNexus** is a production-grade, evidence-grounded scientific literature retrieval, synthesis, and verification platform. Designed to overcome the critical failure modes of conventional RAG — hallucinated citations, conflation of topical relevance with scientific agreement, and false certainty on sparse evidence — ResearchNexus pairs **dual-index hybrid search** (ChromaDB dense vectors + Okapi BM25 lexical search) with a **custom fine-tuned neural cross-encoder reranker** (`minilm-scifact-finetuned`), automated **evidence stance classification** (`SUPPORT`, `CONTRADICT`, `NEUTRAL`, `UNCERTAIN`), strict **citation provenance verification**, and an **insufficient-evidence abstention protocol**.
+
+> **100% Free by Default** — ResearchNexus runs entirely without paid APIs. LLM inference uses [Groq](https://groq.com/) (free-tier Llama-3.3-70b), and embeddings use local [SentenceTransformers](https://www.sbert.net/) (`all-MiniLM-L6-v2`). OpenAI is supported as an optional alternative.
 
 ```
 +----------------------------------------------------------------------------------------------------+
 |  KEY PERFORMANCE HIGHLIGHTS                                                                        |
-|  • +0.0382 nDCG@10 (+5.6% relative gain) over MS-MARCO baseline on held-out SciFact (p = 0.0006)   |
+|  • +0.0382 nDCG@10 (+5.6% relative gain) over MS-MARCO baseline on held-out SciFact (p = 0.0006)  |
 |  • 61/61 automated unit and integration tests passing with 100% test suite reliability             |
-|  • 15 production REST API endpoints + 6-page interactive Streamlit intelligence suite              |
-|  • Zero-hallucination abstention guard with calibrated confidence scoring and source provenance     |
+|  • 11 production REST API endpoints + 6-page interactive Streamlit intelligence suite              |
+|  • Zero-hallucination abstention guard with calibrated confidence scoring and source provenance    |
 +----------------------------------------------------------------------------------------------------+
 ```
 
@@ -34,20 +37,16 @@
 
 | Capability | Standard Naive RAG | ResearchNexus Architecture |
 |---|---|---|
-| **Retrieval Paradigm** | Single-vector dense search (loses exact acronyms, chemical formulas, and gene symbols) | **Dual-Index Hybrid Retrieval**: Dense embeddings (`text-embedding-3-small`) + Okapi BM25 with biomedical tokenization fused via **Weighted Reciprocal Rank Fusion (RRF)** |
+| **Retrieval Paradigm** | Single-vector dense search (loses exact acronyms, chemical formulas, and gene symbols) | **Dual-Index Hybrid Retrieval**: Dense embeddings (local SentenceTransformers or OpenAI `text-embedding-3-small`) + Okapi BM25 with biomedical tokenization fused via **Weighted Reciprocal Rank Fusion (RRF)** |
 | **Passage Reranking** | None or off-the-shelf general web cross-encoders | **Custom Fine-Tuned Cross-Encoder**: Domain-adapted `minilm-scifact-finetuned` trained with contrastive hard negatives on scientific claims (**+0.0382 nDCG@10**, $p < 0.001$) |
 | **Evidence Semantics** | Assumes high cosine similarity implies factual support | **Automated Stance Classification**: Disentangles relevance from scientific consensus, categorizing passages into `SUPPORT`, `CONTRADICT`, `NEUTRAL`, or `UNCERTAIN` |
 | **Citation Rigor** | Superficial or hallucinated references | **Verifiable Citation Provenance Engine**: Strict bracketed citations (`[1]`, `[2]`) linked to verified document passages with DOI, title, section hierarchy, and quote matches |
 | **Sparse Data Handling** | Generates plausible-sounding hallucinations | **Calibrated Abstention Guard**: Explicitly abstains when empirical confidence falls below threshold, providing transparent rationale and alternative search recommendations |
-| **Production Serving** | Monolithic script or static endpoint | **Enterprise Dual-Interface**: 15 FastAPI REST endpoints with hot-swappable model selection and a 6-page interactive Streamlit intelligence workspace |
+| **Production Serving** | Monolithic script or static endpoint | **Enterprise Dual-Interface**: 11 FastAPI REST endpoints with hot-swappable model selection and a 6-page interactive Streamlit intelligence workspace |
 
 ---
 
 ## 🏗️ System Architecture
-
-![ResearchNexus System Architecture](assets/flowgraph.png)
-
-ResearchNexus coordinates an **Offline Document Ingestion & Hybrid Indexing Pipeline** with an **Online Multi-Stage Evidence Retrieval & Synthesis Engine**:
 
 ```mermaid
 flowchart TD
@@ -69,7 +68,7 @@ flowchart TD
 
     subgraph DUAL_INDEX["2. Dual-Index Hybrid Representation"]
         direction LR
-        DENSE_IDX[("🗄️ Dense Vector Store<br/>ChromaDB Collection<br/>text-embedding-3-small<br/>1536-dim Cosine Metric")]:::index
+        DENSE_IDX[("🗄️ Dense Vector Store<br/>ChromaDB Collection<br/>SentenceTransformers / OpenAI<br/>Cosine Metric")]:::index
         SPARSE_IDX[("📚 Lexical Index<br/>Okapi BM25 Index<br/>Normalized & Stemmed<br/>k1=1.5, b=0.75")]:::index
     end
     CHUNK --> DENSE_IDX
@@ -125,7 +124,7 @@ flowchart TD
     subgraph CLIENTS["5. Presentation & Integration Layer"]
         direction LR
         UI["🖥️ Streamlit Intelligence Workspace<br/>(6-Page Interactive Dashboard)"]:::output
-        API["⚡ FastAPI Production Server<br/>(15 REST Endpoints + OpenAPI Docs)"]:::output
+        API["⚡ FastAPI Production Server<br/>(11 REST Endpoints + OpenAPI Docs)"]:::output
         CLI["💻 CLI Query Runner<br/>(main.py script)"]:::output
     end
 
@@ -148,7 +147,7 @@ flowchart TD
      - *Semantic Chunking*: Splits along semantic boundaries based on embedding distance shifts between consecutive sentences.
 
 2. **Dual-Index Hybrid Retrieval & Reciprocal Rank Fusion (`src/indexer.py`)**:
-   - **Dense Semantic Index**: ChromaDB backed by OpenAI `text-embedding-3-small` (1536-dimensional embeddings) with cosine similarity metric for conceptual discovery.
+   - **Dense Semantic Index**: ChromaDB backed by local SentenceTransformers `all-MiniLM-L6-v2` (default, free) or OpenAI `text-embedding-3-small` (optional) with cosine similarity metric for conceptual discovery.
    - **Lexical Index**: In-memory Okapi BM25 (`k1=1.5`, `b=0.75`) with normalized biomedical tokenization preserving exact chemical formulas, acronyms, and gene symbols.
    - **Weighted Reciprocal Rank Fusion (RRF)**: Merges score-disparate candidate lists using rank reciprocity rather than uncalibrated raw scores:
      $$\text{RRF\_Score}(d) = w_{\text{dense}} \cdot \frac{1}{k + \text{rank}_{\text{dense}}(d)} + w_{\text{sparse}} \cdot \frac{1}{k + \text{rank}_{\text{sparse}}(d)}$$
@@ -167,13 +166,17 @@ flowchart TD
    - **Stance Categorization**: Classifies passages into `SUPPORT`, `CONTRADICT`, `NEUTRAL`, or `UNCERTAIN` with calibrated confidence scores and verbatim evidentiary quotes.
    - **Consensus Aggregation**: Computes overall claim consensus (`SUPPORTED`, `CONTRADICTED`, `CONTESTED`, or `INSUFFICIENT_EVIDENCE`).
 
-5. **Verifiable Citation Provenance & Insufficient-Evidence Abstention (`src/pipeline.py`)**:
+5. **LLM & Embedding Provider Abstraction (`src/models.py`)**:
+   - **Dual LLM Backend**: Defaults to [Groq](https://groq.com/) free-tier `llama-3.3-70b-versatile` via OpenAI-compatible API; falls back to OpenAI `gpt-4o-mini` when `OPENAI_API_KEY` is set.
+   - **Dual Embedding Backend**: Defaults to local HuggingFace SentenceTransformers (`all-MiniLM-L6-v2`, fully offline, zero cost); optionally switches to OpenAI `text-embedding-3-small`.
+
+6. **Verifiable Citation Provenance & Insufficient-Evidence Abstention (`src/pipeline.py`)**:
    - **Strict Provenance Verification**: Inline bracketed citations (`[1]`, `[2]`) rigorously verified against source chunk IDs, DOIs, and exact string containment:
      $$\text{Citation Precision} = \frac{\text{Verified Citations}}{\text{Total Citations Generated}}$$
    - **Calibrated Abstention Guard**: Explicitly abstains when reranker confidence falls below threshold or evidence is insufficient, preventing synthetic hallucinations with transparent rationale and alternative search recommendations.
 
-6. **Production Serving & Dual-Interface Architecture (`app.py`, `streamlit_app.py`)**:
-   - **FastAPI Enterprise Backend**: 15 REST endpoints with hot-swappable model switching, telemetry metrics, and OpenAPI schema documentation at `/docs`.
+7. **Production Serving & Dual-Interface Architecture (`app.py`, `streamlit_app.py`)**:
+   - **FastAPI Enterprise Backend**: 11 REST endpoints with hot-swappable model switching, telemetry metrics, and OpenAPI schema documentation at `/docs`.
    - **Streamlit Intelligence Workspace**: 6-page interactive research dashboard (Executive Dashboard, Research Assistant, Document Library, Evidence Explorer, Model Comparison, Evaluation Suite).
 
 ---
@@ -257,7 +260,6 @@ Here is a sample execution flow demonstrating evidence grounding and stance clas
 
 - Python 3.10 or 3.11
 - Git & Git LFS
-- OpenAI API Key (for embeddings and synthesis)
 
 ```bash
 # Clone repository
@@ -282,17 +284,29 @@ cp .env.example .env
 ```
 
 ```env
-# Core API Settings
-OPENAI_API_KEY=your_openai_api_key_here
-DEFAULT_RERANKER_MODEL=finetuned
+# LLM Provider (100% Free Default: Groq)
+GROQ_API_KEY=your_groq_api_key_here
+LLM_PROVIDER=groq
+GROQ_MODEL=llama-3.3-70b-versatile
 
-# Retrieval Parameters
-CHROMA_PERSIST_DIRECTORY=./data/chroma_db
-RETRIEVAL_DENSE_WEIGHT=0.7
-RETRIEVAL_SPARSE_WEIGHT=0.3
+# Embedding Provider: 'local' (Free SentenceTransformers) or 'openai'
+EMBEDDING_PROVIDER=local
+LOCAL_EMBEDDING_MODEL=all-MiniLM-L6-v2
+
+# Optional: OpenAI API Key (if LLM_PROVIDER=openai or EMBEDDING_PROVIDER=openai)
+# OPENAI_API_KEY=your_openai_api_key_here
+
+# Model Selection for Reranking
+RERANKER_MODEL=finetuned
+
+# Hybrid Retrieval Weights
+DENSE_WEIGHT=0.7
+SPARSE_WEIGHT=0.3
 RRF_K=60
 FINAL_K=5
 ```
+
+> **Tip**: Only a Groq API key is required to get started. Get a free one at [console.groq.com](https://console.groq.com/). OpenAI is entirely optional.
 
 ### 3. Run Automated Test Suite
 
@@ -347,21 +361,21 @@ Streamlit Intelligence Workspace
 
 ## 🔌 REST API Reference
 
-ResearchNexus exposes 15 production-ready REST endpoints:
+ResearchNexus exposes 11 production-ready REST endpoints:
 
 | Endpoint | HTTP | Description | Key Parameters |
 |---|:---:|---|---|
-| `/health` | `GET` | Health check, device detection, and active model status | None |
-| `/metrics` | `GET` | Operational telemetry: query counts, latencies, cache hits | None |
-| `/models` | `GET` | List available cross-encoders, device info, and specs | None |
+| `/health` | `GET` | Health check, device detection, and active model status | — |
+| `/metrics` | `GET` | Operational telemetry: query counts, latencies, cache hits | — |
+| `/models` | `GET` | List available cross-encoders, device info, and specs | — |
 | `/models/select` | `POST` | Dynamically switch active reranker model at runtime | `{"model": "finetuned" \| "pretrained"}` |
 | `/query` | `POST` | Execute hybrid search, reranking, stance analysis & synthesis | `{"query": str, "k": int, "model": str}` |
-| `/documents` | `GET` | Retrieve list of all indexed documents with metadata | None |
+| `/documents` | `GET` | Retrieve list of all indexed documents with metadata | — |
 | `/documents/upload` | `POST` | Ingest and index new scientific papers (PDF, MD, TXT) | Multi-part form upload |
 | `/documents/{filename}` | `DELETE` | Remove document and purge associated index passages | `filename: str` |
-| `/documents/index` | `POST` | Re-index and synchronize vector and lexical stores | None |
-| `/evaluation/summary` | `GET` | Summary benchmark tables across SciFact and SCIDOCS | None |
-| `/evaluation/results` | `GET` | Granular per-query benchmark data and metric distributions| None |
+| `/documents/index` | `POST` | Re-index and synchronize vector and lexical stores | — |
+| `/evaluation/results` | `GET` | Granular per-query benchmark data and metric distributions | — |
+| `/evaluation/summary` | `GET` | Summary benchmark tables across SciFact and SCIDOCS | — |
 
 ### Quick API Usage Example
 
@@ -387,32 +401,46 @@ Full request/response schemas and curl examples are documented in [docs/API.md](
 
 ```text
 research-nexus/
-├── app.py                      # FastAPI production application (15 endpoints, CORS, lifespan)
+├── app.py                      # FastAPI production application (11 endpoints, CORS, lifespan)
 ├── streamlit_app.py            # 6-page interactive Streamlit intelligence suite
 ├── main.py                     # CLI query runner and evaluation entrypoint
 ├── config.py                   # Centralized Pydantic settings & environment configuration
 ├── requirements.txt            # Production dependencies
 ├── requirements-dev.txt        # Development, testing, and linting dependencies
 ├── pytest.ini                  # Pytest runner configuration
+├── evaluation_dataset.json     # Evaluation dataset for retrieval benchmarking
 ├── Dockerfile                  # Container build specification
 ├── docker-compose.yml          # Multi-container service deployment definition
 │
+├── .github/workflows/
+│   └── ci.yml                  # GitHub Actions CI pipeline (Python 3.11, pytest)
+│
 ├── src/                        # Core Application Engine
+│   ├── __init__.py
 │   ├── loader.py               # Document ingestion engine & DOI/year metadata extraction
 │   ├── chunker.py              # Markdown header, recursive token & semantic chunkers
 │   ├── indexer.py              # ChromaDB vector store & Okapi BM25 lexical indexer
 │   ├── retriever.py            # Hybrid RRF fusion & cross-encoder neural reranker
 │   ├── generator.py            # Evidence stance classification & citation generator
+│   ├── models.py               # LLM & embedding provider abstraction (Groq / OpenAI / Local)
 │   ├── evaluator.py            # Information retrieval evaluation metrics (nDCG, MRR, Recall)
 │   ├── pipeline.py             # End-to-end RAG orchestrator with abstention guard
 │   └── results_manager.py      # Benchmark results reader & visualization helper
 │
 ├── Notebook/                   # Experimental Training & Evaluation Artifacts
+│   ├── researchnexus.ipynb     # Main training & evaluation Jupyter notebook
 │   └── researchnexus-finetuning/
 │       ├── minilm-scifact-finetuned/  # Saved fine-tuned PyTorch cross-encoder weights
 │       ├── datasets/                  # SciFact & SCIDOCS benchmark datasets
 │       ├── plots/                     # Diagnostic plots (loss, ablation, bootstrap CIs)
 │       └── results/                   # Evaluation result CSVs and telemetry logs
+│
+├── scripts/                    # Utility Scripts
+│   ├── build_index.py          # Build ChromaDB + BM25 indexes from corpus
+│   ├── eval_retrieval.py       # Run retrieval evaluation benchmarks
+│   ├── fetch_corpus.py         # Download and prepare scientific corpora
+│   ├── run_ablation.py         # Execute negative sampling ablation experiments
+│   └── validate_judge.py       # Validate LLM judge citation accuracy
 │
 ├── tests/                      # Automated Test Suite (61 tests, 100% passing)
 │   ├── test_api.py             # REST API endpoint tests & error handling
@@ -420,17 +448,24 @@ research-nexus/
 │   ├── test_retriever.py       # Hybrid RRF fusion, caching & fallback tests
 │   ├── test_loader.py          # Metadata extraction & SHA-256 deduplication tests
 │   ├── test_indexer.py         # BM25 tokenization & indexing tests
-│   └── test_evaluator.py       # Metric computation & judge evaluation tests
+│   ├── test_evaluator.py       # Metric computation & judge evaluation tests
+│   └── test_fetch_corpus.py    # Corpus download & preparation tests
 │
-└── docs/                       # Technical Documentation Suite
-    ├── ARCHITECTURE.md         # System design, dataflow & mathematical formulations
-    ├── MODEL_TRAINING.md       # PyTorch training methodology & loss dynamics
-    ├── EVALUATION.md           # Benchmark reports, significance & ablation analysis
-    ├── API.md                  # REST API reference and OpenAPI schema
-    ├── DEVELOPMENT.md          # Local development, testing & Docker guide
-    ├── TECHNICAL_DECISIONS.md  # Architectural Decision Records (ADRs)
-    ├── IMPLEMENTATION_CHECKLIST.md  # Phase-by-phase implementation tracker
-    └── PROJECT_AUDIT.md        # Initial baseline architecture audit
+├── docs/                       # Technical Documentation Suite
+│   ├── ARCHITECTURE.md         # System design, dataflow & mathematical formulations
+│   ├── MODEL_TRAINING.md       # PyTorch training methodology & loss dynamics
+│   ├── EVALUATION.md           # Benchmark reports, significance & ablation analysis
+│   ├── API.md                  # REST API reference and OpenAPI schema
+│   ├── DEVELOPMENT.md          # Local development, testing & Docker guide
+│   ├── SERVICE.md              # Service deployment & operations guide
+│   ├── TECHNICAL_DECISIONS.md  # Architectural Decision Records (ADRs)
+│   ├── IMPLEMENTATION_CHECKLIST.md  # Phase-by-phase implementation tracker
+│   └── PROJECT_AUDIT.md        # Initial baseline architecture audit
+│
+├── results/                    # Retrieval evaluation output CSVs
+├── examples/                   # Example corpora and sample data
+├── data/                       # Scientific paper corpus (user-populated)
+└── assets/                     # Static assets (diagrams, images)
 ```
 
 ---
@@ -446,6 +481,7 @@ For comprehensive deep dives into each system subsystem, refer to the documentat
 | [Comprehensive Evaluation Report](docs/EVALUATION.md) | Wilcoxon signed-rank tests, 10,000-sample bootstrap CIs, SCIDOCS transfer, and negative sampling ablation |
 | [FastAPI REST API Reference](docs/API.md) | Comprehensive endpoint definitions, request/response JSON schemas, and curl examples |
 | [Development & Deployment Guide](docs/DEVELOPMENT.md) | Local environment setup, test execution, linting (Ruff), and Docker deployment |
+| [Service Operations Guide](docs/SERVICE.md) | Service deployment, monitoring, and operations |
 | [Technical Decision Records (ADRs)](docs/TECHNICAL_DECISIONS.md) | Architectural trade-offs, chunking choices, vector database selection, and RRF parameters |
 | [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) | Detailed verification tracker of all implemented capabilities across milestones |
 
@@ -456,10 +492,10 @@ For comprehensive deep dives into each system subsystem, refer to the documentat
 If you use ResearchNexus or its fine-tuned models in your research or application, please cite:
 
 ```bibtex
-@software{researchnexus2024,
+@software{researchnexus2026,
   author = {Agarwal, Piyush},
   title = {ResearchNexus: Scientific Research & Evidence Intelligence Platform},
-  year = {2024},
+  year = {2026},
   publisher = {GitHub},
   journal = {GitHub repository},
   howpublished = {\url{https://github.com/PiyushAgarwalcs/research-nexus}}
