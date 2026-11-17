@@ -8,3 +8,20 @@ chroma_judge_validation_db/
 chroma_retrieval_eval_*/
 # Corpus fetched by scripts/fetch_corpus.py (IETF RFC text; not redistributed here)
 data/rfc*.md
+
+# Large model binaries / checkpoints (>50MB) - download instructions in docs/MODEL_TRAINING.md
+*.safetensors
+*.bin
+*.pt
+*.pth
+Notebook/**/*.safetensors
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Pytest / coverage cache
+.pytest_cache/
+.coverage
+htmlcov/

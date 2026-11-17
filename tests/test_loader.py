@@ -54,3 +54,43 @@ def test_process_file_returns_none_for_empty_file(tmp_path):
 
     loader = multiloader(str(tmp_path))
     assert loader._process_file(str(empty_file)) is None
+
+
+def test_scientific_metadata_extraction(tmp_path):
+    paper_content = """# Deep Learning in Genomics: A Comprehensive Survey
+
+By John Doe and Jane Smith
+Published in 2023. DOI: 10.1038/s41586-023-01234-5
+
+Abstract:
+This survey provides a comprehensive review of transformer architectures applied to genomic sequence analysis. We evaluate multiple benchmarks and analyze cross-domain generalization.
+
+1. Introduction
+Genomics has witnessed exponential data growth...
+"""
+    doc_path = tmp_path / "paper.md"
+    doc_path.write_text(paper_content, encoding="utf-8")
+
+    loader = multiloader(str(tmp_path))
+    doc = loader.load_file(str(doc_path))
+
+    assert doc is not None
+    assert doc.metadata["doi"] == "10.1038/s41586-023-01234-5"
+    assert doc.metadata["year"] == 2023
+    assert "Deep Learning in Genomics" in doc.metadata["title"]
+    assert doc.metadata["abstract"] is not None
+    assert "comprehensive review of transformer architectures" in doc.metadata["abstract"]
+    assert "content_hash" in doc.metadata
+    assert doc.metadata["doc_id"] == doc.metadata["content_hash"]
+
+
+def test_deduplication_filters_duplicate_content(tmp_path):
+    content = "Identical scientific paper text for duplication testing."
+    (tmp_path / "copy1.txt").write_text(content, encoding="utf-8")
+    (tmp_path / "copy2.txt").write_text(content, encoding="utf-8")
+
+    loader = multiloader(str(tmp_path))
+    docs = loader._document_loader(deduplicate=True)
+
+    # Should only keep 1 copy because the content hash matches
+    assert len(docs) == 1

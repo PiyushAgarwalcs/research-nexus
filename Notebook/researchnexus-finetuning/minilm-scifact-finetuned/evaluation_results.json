@@ -1,0 +1,86 @@
+{
+  "BM25 (first stage) | SciFact validation": {
+    "MRR@5": 0.6064207650273223,
+    "Recall@5": 0.6632513661202185,
+    "nDCG@10": 0.6512711988853245,
+    "Precision@5": 0.1426229508196721,
+    "num_queries": 122
+  },
+  "Pretrained MiniLM | SciFact validation": {
+    "MRR@5": 0.6349726775956285,
+    "Recall@5": 0.7636612021857923,
+    "nDCG@10": 0.6745568470852722,
+    "Precision@5": 0.16557377049180327,
+    "num_queries": 122
+  },
+  "Fine-tuned MiniLM | SciFact validation": {
+    "MRR@5": 0.6662568306010929,
+    "Recall@5": 0.7964480874316939,
+    "nDCG@10": 0.7162485912086461,
+    "Precision@5": 0.1737704918032787,
+    "num_queries": 122
+  },
+  "BM25 (first stage) | SciFact test": {
+    "MRR@5": 0.6301666666666667,
+    "Recall@5": 0.7276111111111111,
+    "nDCG@10": 0.6701006610172067,
+    "Precision@5": 0.15799999999999997,
+    "num_queries": 300
+  },
+  "Pretrained MiniLM | SciFact test": {
+    "MRR@5": 0.6421111111111111,
+    "Recall@5": 0.7351666666666667,
+    "nDCG@10": 0.6761521106218752,
+    "Precision@5": 0.16266666666666665,
+    "num_queries": 300
+  },
+  "Fine-tuned MiniLM | SciFact test": {
+    "MRR@5": 0.6862777777777778,
+    "Recall@5": 0.7728333333333333,
+    "nDCG@10": 0.7143594895288391,
+    "Precision@5": 0.1713333333333333,
+    "num_queries": 300
+  },
+  "BM25 (first stage) | SCIDOCS test": {
+    "MRR@5": 0.2607833333333333,
+    "Recall@5": 0.11173333333333335,
+    "nDCG@10": 0.15400478018892386,
+    "Precision@5": 0.11040000000000001,
+    "num_queries": 1000
+  },
+  "Pretrained MiniLM | SCIDOCS test": {
+    "MRR@5": 0.27948333333333336,
+    "Recall@5": 0.12121666666666667,
+    "nDCG@10": 0.1634318978932583,
+    "Precision@5": 0.11960000000000001,
+    "num_queries": 1000
+  },
+  "Fine-tuned MiniLM | SCIDOCS test": {
+    "MRR@5": 0.24980000000000002,
+    "Recall@5": 0.10703333333333333,
+    "nDCG@10": 0.1457408262137491,
+    "Precision@5": 0.1056,
+    "num_queries": 1000
+  },
+  "Ablation: random negatives | SciFact validation": {
+    "MRR@5": 0.6833333333333333,
+    "Recall@5": 0.7862021857923497,
+    "nDCG@10": 0.7226654567873605,
+    "Precision@5": 0.1721311475409836,
+    "num_queries": 122
+  },
+  "Ablation: random negatives | SciFact test": {
+    "MRR@5": 0.7043888888888888,
+    "Recall@5": 0.8025555555555555,
+    "nDCG@10": 0.736046911784112,
+    "Precision@5": 0.1773333333333333,
+    "num_queries": 300
+  },
+  "Ablation: random negatives | SCIDOCS test": {
+    "MRR@5": 0.2761833333333333,
+    "Recall@5": 0.11963333333333333,
+    "nDCG@10": 0.1621084728298075,
+    "Precision@5": 0.118,
+    "num_queries": 1000
+  }
+}

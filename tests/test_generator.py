@@ -284,3 +284,39 @@ def test_unknown_response_lists_suggested_documents_in_rank_order():
     response = system._format_unknown_response("q", "reason", chunks)
 
     assert response["suggested_documents"] == ["b.md", "a.md"]
+
+
+def test_analyze_scientific_evidence_distinguishes_stances():
+    system = _make_system()
+    chunks = [
+        Document(
+            page_content="Randomized controlled trial demonstrated that treatment improved patient survival by 24%.",
+            metadata={"title": "Trial A"},
+        ),
+        Document(
+            page_content="Subsequent meta-analysis showed no evidence of efficacy; clinical trials disproved the hypothesis and drug was ineffective.",
+            metadata={"title": "Study B"},
+        ),
+        Document(
+            page_content="The biological pathway involves tyrosine kinase phosphorylation and downstream transcription factors.",
+            metadata={"title": "Review C"},
+        ),
+    ]
+
+    analysis = system.analyze_scientific_evidence("Does the treatment improve survival?", chunks)
+
+    assert len(analysis["findings"]) == 3
+    # Check that SUPPORT and CONTRADICT are assigned based on content, not all SUPPORT
+    stances = [f["stance"] for f in analysis["findings"]]
+    assert "SUPPORT" in stances
+    assert "CONTRADICT" in stances
+    assert analysis["supporting_count"] >= 1
+    assert analysis["contradicting_count"] >= 1
+
+
+def test_analyze_scientific_evidence_empty_chunks():
+    system = _make_system()
+    analysis = system.analyze_scientific_evidence("Test query", [])
+    assert analysis["supporting_count"] == 0
+    assert analysis["findings"] == []
+    assert len(analysis["evidence_gaps"]) > 0

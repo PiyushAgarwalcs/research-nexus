@@ -1,0 +1,2 @@
+Model,Dataset,MRR@5,Recall@5,nDCG@10,Precision@5,num_queries
+Pretrained MiniLM,SciFact validation,0.6349726775956285,0.7636612021857923,0.6745568470852722,0.16557377049180327,122

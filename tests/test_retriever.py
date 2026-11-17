@@ -230,3 +230,55 @@ def test_injected_reranker_is_used_without_loading_a_model():
 
     load.assert_not_called()
     assert retriever.reranker is sentinel
+
+
+def test_resolve_reranker_target():
+    from src.retriever import resolve_reranker_target
+
+    # Pretrained resolution
+    target_pre, label_pre = resolve_reranker_target("pretrained")
+    assert "MiniLM" in label_pre
+    assert "cross-encoder" in target_pre
+
+    # Fine-tuned resolution
+    target_ft, label_ft = resolve_reranker_target("finetuned")
+    assert "Fine-tuned" in label_ft or "SciFact" in label_ft
+
+
+def test_resolve_reranker_target_fallback_when_path_missing():
+    import config
+    from src.retriever import resolve_reranker_target
+
+    with patch.object(config.Settings, "get_finetuned_model_path", return_value="/nonexistent/checkpoint/path"):
+        target, label = resolve_reranker_target("finetuned")
+        assert "Fallback" in label
+        assert "cross-encoder" in target
+
+
+def test_load_cross_encoder_caches_instances():
+    from src.retriever import _LOADED_MODELS, _load_cross_encoder
+
+    fake_model = FakeCrossEncoder()
+    with patch("src.retriever.CrossEncoder", return_value=fake_model) as mock_ce:
+        m1 = _load_cross_encoder("test-mock-model", device="cpu")
+        m2 = _load_cross_encoder("test-mock-model", device="cpu")
+
+        # Returned same cached instance
+        assert m1 is m2
+        # CrossEncoder constructor only called once
+        assert mock_ce.call_count == 1
+
+
+def test_switch_reranker():
+    from src.retriever import HybridRetriever
+
+    retriever = _make_retriever()
+    fake_model = FakeCrossEncoder()
+    retriever.reranker = fake_model
+    retriever.device = "cpu"
+
+    with patch("src.retriever._load_cross_encoder", return_value=fake_model) as mock_load:
+        new_label = retriever.switch_reranker("pretrained")
+        assert "Pretrained" in new_label
+        assert retriever.model_target == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        mock_load.assert_called_once()

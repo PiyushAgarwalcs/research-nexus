@@ -10,7 +10,20 @@ before this module existed. Every field can be overridden via an environment
 variable of the same name (uppercased), e.g. DENSE_WEIGHT=0.6.
 """
 
+import os
+from enum import Enum
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Resolve project root so relative default paths work regardless of cwd.
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+class RerankerModel(str, Enum):
+    """Which cross-encoder reranker to use."""
+    PRETRAINED = "pretrained"
+    FINETUNED = "finetuned"
 
 
 class Settings(BaseSettings):
@@ -36,10 +49,63 @@ class Settings(BaseSettings):
     judge_model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
 
+    # --- Reranker model selection ---
+    reranker_model: RerankerModel = RerankerModel.FINETUNED
+    pretrained_reranker_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    finetuned_reranker_path: Optional[str] = None  # auto-detected if None
+
     # --- Temperatures ---
     generator_temperature: float = 0
     judge_temperature: float = 0
     synthetic_temperature: float = 0.7
+
+    # --- Project paths ---
+    project_root: str = _PROJECT_ROOT
+    notebook_dir: str = os.path.join(_PROJECT_ROOT, "Notebook")
+    data_dir: str = os.path.join(_PROJECT_ROOT, "data")
+    results_dir: str = os.path.join(_PROJECT_ROOT, "results")
+
+    def get_finetuned_model_path(self) -> Optional[str]:
+        """Return the resolved path to the fine-tuned checkpoint directory.
+
+        If finetuned_reranker_path is explicitly set, use that. Otherwise
+        look in the default Notebook location.  Returns None when the
+        checkpoint cannot be found (the caller should fall back to the
+        pretrained model and log a warning).
+        """
+        if self.finetuned_reranker_path:
+            path = self.finetuned_reranker_path
+            if os.path.isdir(path):
+                return path
+            # Try relative to project root
+            abs_path = os.path.join(self.project_root, path)
+            if os.path.isdir(abs_path):
+                return abs_path
+            return None
+
+        # Default location
+        default = os.path.join(
+            self.notebook_dir,
+            "researchnexus-finetuning",
+            "minilm-scifact-finetuned",
+        )
+        if os.path.isdir(default):
+            return default
+        return None
+
+    def get_active_reranker_name_or_path(self) -> str:
+        """Return the model name (pretrained) or local path (fine-tuned)
+        that the retriever should load."""
+        if self.reranker_model == RerankerModel.FINETUNED:
+            ft_path = self.get_finetuned_model_path()
+            if ft_path:
+                return ft_path
+            # Checkpoint not found — fall back to pretrained
+            import logging
+            logging.getLogger(__name__).warning(
+                "Fine-tuned checkpoint not found; falling back to pretrained reranker."
+            )
+        return self.pretrained_reranker_name
 
 
 settings = Settings()

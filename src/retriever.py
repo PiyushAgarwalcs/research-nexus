@@ -1,20 +1,109 @@
 import logging
+import os
 import time
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+import torch
 from sentence_transformers import CrossEncoder
 
-from config import settings
+from config import RerankerModel, settings
 
 logger = logging.getLogger(__name__)
 
-_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+# Pretrained model name preserved for backward compatibility
+_RERANKER_MODEL = settings.pretrained_reranker_name
+
+# In-memory cache of loaded models to avoid duplicate downloads and disk I/O
+_LOADED_MODELS: Dict[str, CrossEncoder] = {}
 
 
-def _load_cross_encoder(model_name: str, max_retries: int = 5) -> CrossEncoder:
-    """Load a CrossEncoder, retrying on network errors (e.g. interrupted downloads)."""
+def get_default_device() -> str:
+    """Return 'cuda' if GPU is available and initialized, otherwise 'cpu'."""
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def resolve_reranker_target(model_choice: Optional[Union[str, RerankerModel]] = None) -> Tuple[str, str]:
+    """Resolve a model choice or enum to (resolved_path_or_name, human_label).
+
+    Supports:
+      - None -> active model configured in settings
+      - RerankerModel.PRETRAINED / 'pretrained' -> HuggingFace pretrained model
+      - RerankerModel.FINETUNED / 'finetuned' -> Local fine-tuned checkpoint
+      - Any explicit local directory path or HuggingFace repo ID
+    """
+    if model_choice is None:
+        model_choice = settings.reranker_model
+
+    if isinstance(model_choice, RerankerModel):
+        model_choice = model_choice.value
+
+    choice_lower = str(model_choice).lower().strip()
+
+    if choice_lower in ("pretrained", "ms-marco", "base"):
+        return settings.pretrained_reranker_name, "Pretrained MiniLM (ms-marco-MiniLM-L-6-v2)"
+
+    if choice_lower in ("finetuned", "fine-tuned", "scifact"):
+        ft_path = settings.get_finetuned_model_path()
+        if ft_path and os.path.isdir(ft_path):
+            return ft_path, "Fine-tuned MiniLM (SciFact checkpoint)"
+        logger.warning(
+            "Fine-tuned checkpoint not found at %s. Falling back to pretrained model.",
+            ft_path,
+        )
+        return settings.pretrained_reranker_name, "Pretrained MiniLM (ms-marco-MiniLM-L-6-v2) [Fallback]"
+
+    # If it is a direct path to an existing directory
+    if os.path.isdir(str(model_choice)):
+        return str(model_choice), f"Local Model ({os.path.basename(str(model_choice))})"
+
+    # Otherwise treat as HuggingFace identifier or custom path
+    return str(model_choice), str(model_choice)
+
+
+def _load_cross_encoder(
+    model_name_or_path: Optional[str] = None,
+    max_retries: int = 5,
+    device: Optional[str] = None,
+) -> CrossEncoder:
+    """Load a CrossEncoder with caching, local checkpoint support, and network retries.
+
+    If model_name_or_path is None, loads the configured active model.
+    Loaded models are cached by (path, device) to prevent duplicate weight loading.
+    """
+    if model_name_or_path is None:
+        target, _ = resolve_reranker_target()
+    else:
+        target, _ = resolve_reranker_target(model_name_or_path)
+
+    dev = device or get_default_device()
+    cache_key = f"{target}::{dev}"
+
+    if cache_key in _LOADED_MODELS:
+        logger.debug("Reusing cached CrossEncoder for %s on %s", target, dev)
+        return _LOADED_MODELS[cache_key]
+
+    is_local = os.path.isdir(target)
+
+    if is_local:
+        logger.info("Loading local fine-tuned CrossEncoder from %s on %s...", target, dev)
+        try:
+            model = CrossEncoder(target, device=dev)
+            _LOADED_MODELS[cache_key] = model
+            return model
+        except Exception as e:
+            logger.error("Failed to load local model from %s: %s", target, e)
+            if target != settings.pretrained_reranker_name:
+                logger.info("Falling back to pretrained reranker: %s", settings.pretrained_reranker_name)
+                return _load_cross_encoder(settings.pretrained_reranker_name, max_retries=max_retries, device=dev)
+            raise
+
+    # Remote model with download retry logic
+    logger.info("Loading remote CrossEncoder %s on %s...", target, dev)
     for attempt in range(1, max_retries + 1):
         try:
-            return CrossEncoder(model_name)
+            model = CrossEncoder(target, device=dev)
+            _LOADED_MODELS[cache_key] = model
+            return model
         except Exception as e:
             if attempt < max_retries:
                 wait = 5 * attempt
@@ -27,8 +116,9 @@ def _load_cross_encoder(model_name: str, max_retries: int = 5) -> CrossEncoder:
                 )
                 time.sleep(wait)
             else:
+                logger.error("Failed to load CrossEncoder after %d attempts: %s", max_retries, e)
                 raise
-    raise RuntimeError("Unreachable")  # satisfies the type checker
+    raise RuntimeError("Unreachable")
 
 
 class HybridRetriever:
@@ -36,23 +126,47 @@ class HybridRetriever:
         self,
         vectorstore,
         bm25_retriever,
-        dense_weight=settings.dense_weight,
-        sparse_weight=settings.sparse_weight,
+        dense_weight: float = settings.dense_weight,
+        sparse_weight: float = settings.sparse_weight,
         use_reranker: bool = True,
         reranker=None,
+        reranker_model: Optional[Union[str, RerankerModel]] = None,
+        device: Optional[str] = None,
     ):
         self.vectorstore = vectorstore
         self.bm25_retriever = bm25_retriever
         self.dense_weight = dense_weight
         self.sparse_weight = sparse_weight
         self.use_reranker = use_reranker
-        # Skip the network download entirely when reranking is disabled (e.g.
-        # for the reranker-off ablation arm) — no point paying that cost.
-        # Callers comparing many configs can pass one preloaded `reranker`
-        # instead of loading the model once per retriever.
-        if use_reranker and reranker is None:
-            reranker = _load_cross_encoder(_RERANKER_MODEL)
-        self.reranker = reranker if use_reranker else None
+        self.device = device or get_default_device()
+
+        # Determine target model identity
+        if reranker is not None:
+            self.reranker = reranker if use_reranker else None
+            self.model_target = "custom_injected"
+            self.model_label = "Custom Injected Reranker"
+        elif use_reranker:
+            target, label = resolve_reranker_target(reranker_model)
+            self.model_target = target
+            self.model_label = label
+            self.reranker = _load_cross_encoder(target, device=self.device)
+        else:
+            self.reranker = None
+            self.model_target = "disabled"
+            self.model_label = "Reranker Disabled (RRF only)"
+
+    def switch_reranker(self, model_choice: Union[str, RerankerModel]) -> str:
+        """Dynamically switch between pretrained and fine-tuned models at runtime.
+
+        Returns the human-readable label of the newly active model.
+        """
+        target, label = resolve_reranker_target(model_choice)
+        self.model_target = target
+        self.model_label = label
+        self.use_reranker = True
+        self.reranker = _load_cross_encoder(target, device=self.device)
+        logger.info("Retriever reranker switched to: %s (%s)", label, target)
+        return label
 
     def retrieve_and_fuse(
         self,

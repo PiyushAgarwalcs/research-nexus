@@ -9,9 +9,11 @@ callers can still override anything they need to.
 
 import logging
 
+from typing import Optional, Union
+
 from langchain_openai import ChatOpenAI
 
-from config import settings
+from config import RerankerModel, settings
 from src.chunker import Chunker
 from src.generator import AdvancedRAGSystem
 from src.indexer import indexer
@@ -27,21 +29,26 @@ def build_pipeline(
     persist_directory: str = "./chroma_main_db",
     chunking_strategy: str = "TokenRecursive",
     max_documents: int = 50,
+    reranker_model: Optional[Union[str, RerankerModel]] = None,
+    dense_weight: float = settings.dense_weight,
+    sparse_weight: float = settings.sparse_weight,
+    use_reranker: bool = True,
 ) -> AdvancedRAGSystem:
-    """Build a ready-to-query AdvancedRAGSystem.
+    """Build a ready-to-query AdvancedRAGSystem with fine-tuned / pretrained model choice.
 
     Loads documents from `data_dir`, chunks them, builds a Chroma + BM25
-    index at `persist_directory`, wraps it in a HybridRetriever, and returns
-    an AdvancedRAGSystem ready to call `generate_robust_answer(query)` on.
+    index at `persist_directory`, wraps it in a HybridRetriever (configured
+    with the selected reranker), and returns an AdvancedRAGSystem ready to
+    call `generate_robust_answer(query)` on.
     """
     if not openai_api_key:
         raise ValueError("openai_api_key must be a non-empty string.")
 
     loader = multiloader(data_dir)
-    all_documents = loader._document_loader()
+    all_documents = loader._document_loader(deduplicate=True)
     if not all_documents:
         raise ValueError(
-            f"No documents loaded from {data_dir!r}. Run `python scripts/fetch_corpus.py` to download the default corpus."
+            f"No documents loaded from {data_dir!r}. Run `python scripts/fetch_corpus.py` to download the default corpus or upload papers."
         )
     documents = all_documents[:max_documents]
 
@@ -62,7 +69,14 @@ def build_pipeline(
         all_chunks, persist_directory=persist_directory
     )
 
-    retriever = HybridRetriever(vectorstore=vectorstore, bm25_retriever=bm25_retriever)
+    retriever = HybridRetriever(
+        vectorstore=vectorstore,
+        bm25_retriever=bm25_retriever,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
+        use_reranker=use_reranker,
+        reranker_model=reranker_model,
+    )
 
     generator_llm = ChatOpenAI(
         model=settings.generator_model,
