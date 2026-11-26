@@ -90,10 +90,23 @@ st.markdown(
 
 # --- Helper: Cached Pipeline Loader ---
 
+def _get_api_key():
+    """Retrieve API key from st.secrets or environment variables."""
+    key = None
+    try:
+        if hasattr(st, "secrets"):
+            key = st.secrets.get("GROQ_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+    except Exception:
+        pass
+    if not key:
+        load_dotenv()
+        key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    return key
+
+
 @st.cache_resource(show_spinner="Initializing ResearchNexus hybrid pipeline & models...")
 def get_pipeline(reranker_choice: str):
-    load_dotenv()
-    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    api_key = _get_api_key()
     if not api_key:
         return None
     data_dir = os.getenv("DATA_DIR", settings.data_dir)
@@ -129,8 +142,9 @@ selected_reranker_label = st.sidebar.selectbox(
 active_reranker_id = reranker_options[selected_reranker_label]
 
 # Active Providers Display
-groq_active = bool(os.getenv("GROQ_API_KEY"))
-llm_name = "Groq (Llama-3.3-70b)" if groq_active else ("OpenAI (gpt-4o-mini)" if os.getenv("OPENAI_API_KEY") else "None configured")
+_api_key_configured = _get_api_key()
+groq_active = bool(_api_key_configured and str(_api_key_configured).startswith("gsk_")) or bool(os.getenv("GROQ_API_KEY"))
+llm_name = f"Groq ({settings.groq_model})" if groq_active else ("OpenAI (gpt-4o-mini)" if _api_key_configured else "None configured")
 st.sidebar.caption(f"🧠 **LLM:** {llm_name}")
 st.sidebar.caption("📐 **Embeddings:** Local SentenceTransformers")
 
@@ -243,18 +257,17 @@ elif page == "🔬 Research Assistant":
         unsafe_allow_html=True,
     )
 
-    load_dotenv()
-    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    api_key = _get_api_key()
 
     if not api_key:
         st.warning("⚠️ No API key found. Enter a GROQ API Key (100% free) or OpenAI API Key to enable live answers:")
         api_key_input = st.text_input("Enter API Key (Groq or OpenAI):", type="password")
         if api_key_input:
-            api_key = api_key_input
-            if api_key_input.startswith("gsk_"):
-                os.environ["GROQ_API_KEY"] = api_key_input
+            api_key = api_key_input.strip()
+            if api_key.startswith("gsk_"):
+                os.environ["GROQ_API_KEY"] = api_key
             else:
-                os.environ["OPENAI_API_KEY"] = api_key_input
+                os.environ["OPENAI_API_KEY"] = api_key
 
     sample_questions = [
         "Select a sample research question or type your own...",
@@ -279,7 +292,7 @@ elif page == "🔬 Research Assistant":
         if not query_text.strip():
             st.warning("Please provide a query first.")
         elif not api_key:
-            st.error("OpenAI API Key required to run the hybrid generator.")
+            st.error("GROQ_API_KEY (for free Groq) or OPENAI_API_KEY required to run the hybrid generator. Please configure it in your Streamlit Secrets or enter it above.")
         else:
             with st.spinner("Executing dense + sparse retrieval, fusion, reranking, and citation verification..."):
                 start_time = time.perf_counter()
@@ -488,7 +501,7 @@ elif page == "🔍 Evidence Explorer":
 
     if st.button("Inspect Evidence Ranks", type="primary"):
         load_dotenv()
-        api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+        api_key = _get_api_key()
         if not api_key:
             st.warning("GROQ_API_KEY or OPENAI_API_KEY needed for live similarity search.")
         else:
