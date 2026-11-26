@@ -33,6 +33,15 @@
 
 ---
 
+<p align="center">
+  <img src="assets/streamlit_research_assistant.jpg" alt="Research Assistant & Confidence Signals" width="95%"/>
+</p>
+<p align="center">
+  <img src="assets/streamlit_stance_verification.jpg" alt="Scientific Evidence Stance & Citation Verification" width="95%"/>
+</p>
+
+---
+
 ## 🌟 Key Features & Capabilities
 
 | Capability | Standard Naive RAG | ResearchNexus Architecture |
@@ -356,20 +365,6 @@ Streamlit Intelligence Workspace
 ├── ⚖️ 5. Model Comparison         # Live side-by-side A/B evaluation of Pretrained vs Fine-Tuned cross-encoders
 └── 📈 6. Evaluation Dashboard     # Diagnostic training curves, loss dynamics, negative mining ablations, and bootstrap CIs
 ```
-
-### UI Showcase
-
-<p align="center">
-  <img src="assets/streamlit_research_assistant.jpg" alt="Research Assistant & Confidence Signals" width="850"/>
-  <br/>
-  <em>Figure 1: Research Assistant performing evidence-grounded synthesis with real-time Confidence & Verification Signals (Composite Score, Retrieval Confidence, Citation Coverage, Completeness).</em>
-</p>
-
-<p align="center">
-  <img src="assets/streamlit_stance_verification.jpg" alt="Scientific Evidence Stance & Citation Verification" width="850"/>
-  <br/>
-  <em>Figure 2: Automated Scientific Evidence Stance Classification (SUPPORT, NEUTRAL, CONTRADICT, UNCERTAIN) and verifiable passage provenance mapping.</em>
-</p>
 
 ---
 
