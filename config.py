@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # --- Models (main.py, src/indexer.py, src/evaluator.py) ---
     llm_provider: str = "groq"
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_api_base: str = "https://api.groq.com/openai/v1"
     generator_model: str = "gpt-4o-mini"
     judge_model: str = "gpt-4o-mini"
