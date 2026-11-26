@@ -2,6 +2,8 @@
 
 ### Enterprise Scientific Research & Evidence Intelligence Platform
 
+[![Live Demo](https://img.shields.io/badge/Streamlit%20App-Live%20Demo-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://piyushagarwalcs-research-nexus-streamlit-app-zrs8qs.streamlit.app/)
+
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![HuggingFace](https://img.shields.io/badge/%F0%9F%A4%97-Sentence--Transformers-FFD21E)](https://huggingface.co/)
@@ -13,7 +15,9 @@
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Key Features](#-key-features--capabilities) • [Architecture](#%EF%B8%8F-system-architecture) • [Benchmarks](#-empirical-benchmark-results) • [Quick Start](#-quick-start) • [Streamlit Platform](#%EF%B8%8F-streamlit-intelligence-workspace) • [REST API](#-rest-api-reference) • [Documentation](#-complete-documentation-suite)
+🚀 **Live Interactive Demo:** [https://piyushagarwalcs-research-nexus-streamlit-app-zrs8qs.streamlit.app/](https://piyushagarwalcs-research-nexus-streamlit-app-zrs8qs.streamlit.app/)
+
+[Live Demo](https://piyushagarwalcs-research-nexus-streamlit-app-zrs8qs.streamlit.app/) • [Key Features](#-key-features--capabilities) • [Architecture](#%EF%B8%8F-system-architecture) • [Benchmarks](#-empirical-benchmark-results) • [Quick Start](#-quick-start) • [Streamlit Platform](#%EF%B8%8F-streamlit-intelligence-workspace) • [REST API](#-rest-api-reference) • [Documentation](#-complete-documentation-suite)
 
 ---
 
